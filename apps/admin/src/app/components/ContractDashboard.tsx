@@ -139,7 +139,24 @@ export function ContractDashboard({
     : companies.find(c => c.id === activeCompanyId)
 
   const filteredEmployees = employees.filter(e => e.companyId === activeCompanyId)
-  
+
+  // If no company is selected (especially for super admin), show a message
+  if (!currentCompany) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <div className="text-center">
+          <Building2 className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">회사를 선택해주세요</h3>
+          <p className="text-slate-500">
+            {user.role === 'SUPER_ADMIN'
+              ? '위 드롭다운에서 관리할 회사를 선택하세요.'
+              : '회사 정보를 불러오는 중입니다...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(new Set(filteredEmployees.map(e => e.id)))
