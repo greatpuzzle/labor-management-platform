@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run start:dev:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n\\\\n=== 회사 관리자가 직원 삭제 시도 \\(SUPER_ADMIN만 가능\\) ===\")",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm install:*)",
+      "Bash(find:*)",
+      "Bash(npm run dev:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)"
+    ]
+  }
+}

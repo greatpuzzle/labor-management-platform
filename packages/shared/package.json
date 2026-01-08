@@ -1,0 +1,8 @@
+{
+  "name": "@shared/data",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./data.ts",
+  "types": "./data.ts"
+}
+

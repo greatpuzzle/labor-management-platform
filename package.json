@@ -1,0 +1,25 @@
+{
+  "name": "labor-management-platform",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:admin": "cd apps/admin && npm run dev",
+    "dev:mobile": "cd apps/mobile && npm run dev",
+    "dev": "npm run dev:admin",
+    "build:admin": "cd apps/admin && npm run build",
+    "build:mobile": "cd apps/mobile && npm run build",
+    "build": "npm run build:admin && npm run build:mobile",
+    "install:all": "npm install && cd apps/admin && npm install && cd ../mobile && npm install"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.13.2"
+  }
+}
