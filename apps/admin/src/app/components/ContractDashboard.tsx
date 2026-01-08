@@ -362,63 +362,6 @@ export function ContractDashboard({
               </div>
               <p className="text-slate-500">기업별 근로자 및 계약 관리 대시보드</p>
             </div>
-
-            {user.role === 'SUPER_ADMIN' && (
-              <div className="w-full md:w-auto flex flex-col gap-2">
-                 <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Company</Label>
-                 <Popover open={isCompanyComboOpen} onOpenChange={setIsCompanyComboOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={isCompanyComboOpen}
-                        className="w-full md:w-[300px] justify-between h-11 bg-white"
-                      >
-                        {currentCompany ? (
-                           <div className="flex items-center gap-2">
-                               <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center border">
-                                  <Building2 className="w-3.5 h-3.5 text-slate-500" />
-                               </div>
-                               <span className="font-medium">{currentCompany.name}</span>
-                           </div>
-                        ) : "기업을 선택하세요..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0">
-                      <Command>
-                        <CommandInput placeholder="기업명 검색..." />
-                        <CommandList>
-                          <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
-                          <CommandGroup heading="등록된 기업">
-                            {companies.map((company) => (
-                              <CommandItem
-                                key={company.id}
-                                value={company.name}
-                                onSelect={() => {
-                                  setSelectedCompanyId(company.id)
-                                  setSelectedIds(new Set()) // Clear selection on company change
-                                  setIsCompanyComboOpen(false)
-                                }}
-                              >
-                                <Check
-                                  className={`mr-2 h-4 w-4 ${
-                                    selectedCompanyId === company.id ? "opacity-100" : "opacity-0"
-                                  }`}
-                                />
-                                <div className="flex flex-col">
-                                   <span>{company.name}</span>
-                                   <span className="text-xs text-slate-400">담당자: {company.ceo}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                 </Popover>
-              </div>
-            )}
          </div>
       </div>
 
