@@ -260,7 +260,8 @@ export function ContractDashboard({
   const handleCopyInviteLink = () => {
     // 모바일 앱 URL (근로자 정보 입력 페이지)
     const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://localhost:5174';
-    const link = `${mobileAppUrl}?invite=${activeCompanyId}`;
+    // Use hash instead of query params for better compatibility
+    const link = `${mobileAppUrl}/#invite=${activeCompanyId}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
