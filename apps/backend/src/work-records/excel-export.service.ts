@@ -67,7 +67,7 @@ export class ExcelExportService {
         employee.name,
         employee.phone,
         employee.disabilityLevel === 'SEVERE' ? '1' : '2', // 장애인정구분 (1:중증, 2:경증)
-        employee.disabilityType,
+        this.getDisabilityTypeCode(employee.disabilityType), // 장애유형 코드
         '', // 상이등급
         employee.disabilityLevel === 'SEVERE' ? 'Y' : 'N', // 중증여부
         employee.disabilityRecognitionDate.replace(/-/g, ''), // 장애인정일 (YYYYMMDD)
@@ -168,5 +168,41 @@ export class ExcelExportService {
     // "월 2,300,000원" -> 2300000
     const numbers = salaryString.replace(/[^0-9]/g, '');
     return parseInt(numbers, 10) || 0;
+  }
+
+  private getDisabilityTypeCode(disabilityType: string): string {
+    // 장애 유형을 코드로 변환
+    const disabilityCodeMap: { [key: string]: string } = {
+      '지체장애': '지체-10',
+      '뇌병변장애': '뇌병변-20',
+      '시각장애': '시각-30',
+      '청각장애': '청각-40',
+      '언어장애': '언어-50',
+      '지적장애': '지적-60',
+      '정신장애': '정신-70',
+      '자폐성장애': '자폐성-80',
+      '신장장애': '신장-90',
+      '심장장애': '심장-A0',
+      '호흡기장애': '호흡기-B0',
+      '간장애': '간-C0',
+      '안면장애': '안면-D0',
+      '장루요루장애': '장루요루-E0',
+      '뇌전증장애': '뇌전증-F0',
+    };
+
+    // 정확히 일치하는 경우
+    if (disabilityCodeMap[disabilityType]) {
+      return disabilityCodeMap[disabilityType];
+    }
+
+    // 부분 일치 검색 (예: "지체" -> "지체-10")
+    for (const [key, value] of Object.entries(disabilityCodeMap)) {
+      if (disabilityType.includes(key.replace('장애', ''))) {
+        return value;
+      }
+    }
+
+    // 매칭되지 않는 경우 원본 반환
+    return disabilityType;
   }
 }

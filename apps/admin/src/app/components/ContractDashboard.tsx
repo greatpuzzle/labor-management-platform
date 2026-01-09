@@ -820,14 +820,18 @@ export function ContractDashboard({
           </TableHeader>
           <TableBody>
             {filteredEmployees.length > 0 ? (
-              filteredEmployees.map((employee) => (
-                <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"}>
-                  <TableCell>
-                    <Checkbox 
-                      checked={selectedIds.has(employee.id)}
-                      onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
-                    />
-                  </TableCell>
+              filteredEmployees.map((employee) => {
+                const isCompleted = employee.status === 'completed';
+                return (
+                  <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"} className={isCompleted ? 'opacity-60' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(employee.id)}
+                        onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
+                        disabled={isCompleted}
+                        title={isCompleted ? '이미 계약이 완료된 근로자입니다' : ''}
+                      />
+                    </TableCell>
                   <TableCell className="font-medium">{employee.name}</TableCell>
                   <TableCell>{employee.phone}</TableCell>
                   <TableCell>{employee.dob}</TableCell>
@@ -884,7 +888,8 @@ export function ContractDashboard({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+              );
+            }))
             ) : (
                <TableRow>
                   <TableCell colSpan={9} className="h-24 text-center text-slate-500">

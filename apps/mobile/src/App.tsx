@@ -12,6 +12,7 @@ export default function App() {
   const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [showEmployeeContract, setShowEmployeeContract] = useState(false);
   const [showWorkTracker, setShowWorkTracker] = useState(false);
   const [currentEmployeeName, setCurrentEmployeeName] = useState("");
@@ -20,6 +21,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const invite = params.get('invite');
+    console.log('[Mobile App] Invite link detected:', invite);
     if (invite) {
       setInviteCompanyId(invite);
       loadCompanyName(invite);
@@ -28,13 +30,16 @@ export default function App() {
 
   const loadCompanyName = async (companyId: string) => {
     setLoading(true);
+    setLoadError(false);
     try {
+      console.log('[Mobile App] Loading company:', companyId);
       const company = await api.getCompany(companyId);
+      console.log('[Mobile App] Company loaded:', company);
       setCompanyName(company.name);
     } catch (error) {
-      console.error('Failed to load company name:', error);
+      console.error('[Mobile App] Failed to load company:', error);
+      setLoadError(true);
       toast.error('회사 정보를 불러올 수 없습니다.');
-      setCompanyName('');
     } finally {
       setLoading(false);
     }
@@ -109,21 +114,39 @@ export default function App() {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="text-center">
-            <p className="text-slate-500">로딩 중...</p>
+            <p className="text-slate-500">회사 정보를 불러오는 중...</p>
           </div>
         </div>
       );
     }
 
-    if (!companyName) {
+    if (loadError || !companyName) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="text-center p-4">
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">유효하지 않은 링크</h1>
-            <p className="text-slate-500 mb-4">올바른 초대 링크인지 확인해주세요.</p>
-            <Button className="mt-4" onClick={() => setInviteCompanyId(null)}>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">
+              {loadError ? '회사 정보를 불러올 수 없습니다' : '유효하지 않은 링크'}
+            </h1>
+            <p className="text-slate-500 mb-4">
+              {loadError
+                ? '백엔드 서버가 실행 중인지 확인해주세요.'
+                : '올바른 초대 링크인지 확인해주세요.'}
+            </p>
+            <Button className="mt-4" onClick={() => {
+              setInviteCompanyId(null);
+              setLoadError(false);
+            }}>
               홈으로 이동
             </Button>
+            {loadError && (
+              <Button
+                variant="outline"
+                className="mt-2 ml-2"
+                onClick={() => loadCompanyName(inviteCompanyId)}
+              >
+                다시 시도
+              </Button>
+            )}
           </div>
         </div>
       );
