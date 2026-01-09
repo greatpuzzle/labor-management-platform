@@ -19,12 +19,17 @@ export default function App() {
   const [showPWAPrompt, setShowPWAPrompt] = useState(false);
 
   useEffect(() => {
+    console.log('[Mobile App] Full URL:', window.location.href);
+    console.log('[Mobile App] URL search:', window.location.search);
     const params = new URLSearchParams(window.location.search);
     const invite = params.get('invite');
+    console.log('[Mobile App] All URL params:', Object.fromEntries(params.entries()));
     console.log('[Mobile App] Invite link detected:', invite);
     if (invite) {
       setInviteCompanyId(invite);
       loadCompanyName(invite);
+    } else {
+      console.log('[Mobile App] No invite parameter found in URL');
     }
   }, []);
 

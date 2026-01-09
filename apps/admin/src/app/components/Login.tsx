@@ -114,19 +114,6 @@ export function Login({ onLogin, onSimulateInvite }: LoginProps) {
              © 2026 Great Puzzle Corp. All rights reserved.
           </div>
         </Card>
-
-        {/* Developer Tool for Testing Invite */}
-        <div className="text-center">
-           <p className="text-xs text-slate-500 mb-2">―― Developer Tools ――</p>
-           <Button 
-             variant="outline" 
-             className="bg-white/50 border-dashed text-slate-600 hover:bg-white hover:text-[#2E4F4F]"
-             onClick={onSimulateInvite}
-           >
-             <FlaskConical className="mr-2 h-4 w-4" />
-             초대 링크 접속 시뮬레이션
-           </Button>
-        </div>
       </div>
     </div>
   )

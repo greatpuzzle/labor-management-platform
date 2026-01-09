@@ -176,7 +176,7 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
   }
 
   return (
-    <Sidebar className="bg-[#2E6B4E] border-none text-white" collapsible="none">
+    <Sidebar className="bg-[#2E6B4E] border-none text-white fixed left-0 top-0 h-screen z-50" collapsible="none">
        <SidebarHeader className="p-5 pb-8">
         <div className="flex items-center gap-3">
            <div className="size-[40px] bg-white rounded-[10px] flex items-center justify-center shrink-0">
