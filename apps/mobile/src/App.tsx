@@ -82,17 +82,36 @@ export default function App() {
     disabilityRecognitionDate: string;
     emergencyContactName: string;
     emergencyContactPhone: string;
-    documentUrl?: string;
+    welfareCardUrl?: string;
+    severeCertificateUrl?: string;
     sensitiveInfoConsent: boolean;
+    contractPeriod: string;
+    workingHours: string;
+    workPlace: string;
+    salary: string;
   }) => {
     if (!inviteCompanyId) return;
 
     try {
-      await api.createEmployee(inviteCompanyId, data);
+      await api.createEmployee(inviteCompanyId, {
+        name: data.name,
+        phone: data.phone,
+        dob: data.dob,
+        disabilityLevel: data.disabilityLevel,
+        disabilityType: data.disabilityType,
+        disabilityRecognitionDate: data.disabilityRecognitionDate,
+        emergencyContactName: data.emergencyContactName,
+        emergencyContactPhone: data.emergencyContactPhone,
+        sensitiveInfoConsent: data.sensitiveInfoConsent,
+        // 근로조건 기본값
+        contractPeriod: data.contractPeriod,
+        workingHours: data.workingHours,
+        salary: data.salary,
+      });
       setCurrentEmployeeName(data.name);
       toast.success('직원 등록이 완료되었습니다!');
-      // Show PWA prompt before contract (will auto-skip if not applicable)
-      setShowPWAPrompt(true);
+      // 이제 바로 계약서로 이동하지 않음 - 관리자가 발송할 때까지 대기
+      // EmployeeRegistration의 complete 화면에서 대기 안내 표시
     } catch (error: any) {
       console.error('Failed to register employee:', error);
       toast.error(error.response?.data?.message || '직원 등록에 실패했습니다.');

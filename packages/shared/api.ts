@@ -8,6 +8,12 @@ const getApiBaseUrl = () => {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
+
+  // Auto-detect network IP for mobile app
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return `http://${window.location.hostname}:3000`;
+  }
+
   return 'http://localhost:3000';
 };
 

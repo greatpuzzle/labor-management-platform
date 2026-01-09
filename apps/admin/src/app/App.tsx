@@ -28,6 +28,8 @@ import {
 import { LogOut, Building2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { api, Employee as ApiEmployee } from '@shared/api';
+// 테스트 링크 유틸리티 (개발자 도구에서 사용 가능)
+import '../utils/showTestLinks';
 
 interface User {
   id: string;

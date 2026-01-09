@@ -7,8 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// ========== 사용자 및 회사 ==========
-
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -17,18 +15,13 @@ model User {
   phone     String
   role      UserRole @default(COMPANY_ADMIN)
   companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@index([email])
   @@index([companyId])
   @@map("users")
-}
-
-enum UserRole {
-  SUPER_ADMIN
-  COMPANY_ADMIN
 }
 
 model Company {
@@ -37,25 +30,21 @@ model Company {
   ceo            String
   address        String
   phone          String
-  businessNumber String?    // 사업자등록번호
   stampImageUrl  String?
-  users          User[]
-  employees      Employee[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  businessNumber String?
+  employees      Employee[]
+  users          User[]
 
   @@map("companies")
 }
 
-// ========== 직원 정보 ==========
-
 model Employee {
-  id                        String         @id @default(cuid())
+  id                        String          @id @default(cuid())
   companyId                 String
-  company                   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name                      String
   phone                     String
-  residentNumber            String?        // 주민등록번호
   dob                       String
   workingHours              String
   salary                    String
@@ -66,35 +55,23 @@ model Employee {
   emergencyContactName      String
   emergencyContactPhone     String
   documentUrl               String?
-  sensitiveInfoConsent      Boolean        @default(false)
-  contractStatus            ContractStatus @default(DRAFT)
+  sensitiveInfoConsent      Boolean         @default(false)
+  contractStatus            ContractStatus  @default(DRAFT)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  residentNumber            String?
   contracts                 Contract[]
+  company                   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   workRecords               WorkRecord[]
-  createdAt                 DateTime       @default(now())
-  updatedAt                 DateTime       @updatedAt
 
   @@index([companyId])
   @@index([contractStatus])
   @@map("employees")
 }
 
-enum DisabilityLevel {
-  SEVERE  // 중증
-  MILD    // 경증
-}
-
-enum ContractStatus {
-  DRAFT
-  SENT
-  COMPLETED
-}
-
-// ========== 계약서 ==========
-
 model Contract {
   id             String         @id @default(cuid())
   employeeId     String
-  employee       Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   workingHours   String
   salary         String
   contractPeriod String
@@ -106,18 +83,16 @@ model Contract {
   sentBy         String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  employee       Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([status])
   @@map("contracts")
 }
 
-// ========== 근무 기록 ==========
-
 model WorkRecord {
   id         String     @id @default(cuid())
   employeeId String
-  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   date       String
   startTime  DateTime
   endTime    DateTime?
@@ -126,11 +101,28 @@ model WorkRecord {
   notes      String     @default("")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([date])
   @@index([status])
   @@map("work_records")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+}
+
+enum DisabilityLevel {
+  SEVERE
+  MILD
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  COMPLETED
 }
 
 enum WorkStatus {

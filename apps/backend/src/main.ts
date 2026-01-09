@@ -21,10 +21,28 @@ async function bootstrap() {
   const corsOrigin = process.env.CORS_ORIGIN?.split(',') || [
     'http://localhost:5173',
     'http://localhost:5174',
+    'http://192.168.45.187:5173',
+    'http://192.168.45.187:5174',
   ];
 
+  console.log('🔐 CORS allowed origins:', corsOrigin);
+
   app.enableCors({
-    origin: corsOrigin,
+    origin: (origin, callback) => {
+      console.log('📨 CORS request from origin:', origin);
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (corsOrigin.includes(origin)) {
+        console.log('✅ CORS allowed for:', origin);
+        return callback(null, true);
+      }
+
+      console.log('❌ CORS blocked for:', origin);
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   });
 

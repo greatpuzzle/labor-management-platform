@@ -26,7 +26,8 @@ import {
   Stamp,
   Link as LinkIcon,
   Clock,
-  FileDown
+  FileDown,
+  Trash2
 } from "lucide-react"
 import * as XLSX from 'xlsx'
 import {
@@ -39,6 +40,16 @@ import {
   DialogTrigger,
   DialogClose,
 } from "./ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import {
@@ -61,7 +72,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
-import { User, Employee, companies } from "@shared/data" // Import types and data
+import { User, Employee } from "@shared/data" // Import types
 import { toast } from "sonner"
 import { StampManager } from "./StampManager"
 import { api } from "@shared/api"
@@ -121,6 +132,10 @@ export function ContractDashboard({
   const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false)
   const [selectedEmployee, setSelectedEmployee] = React.useState<Employee | null>(null)
 
+  // Delete Confirmation Dialog State
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false)
+  const [isDeleting, setIsDeleting] = React.useState(false)
+
   // Initialize view based on user role
   React.useEffect(() => {
     if (user.role === 'COMPANY_ADMIN' && user.companyId) {
@@ -136,7 +151,7 @@ export function ContractDashboard({
   // Derived Data
   const currentCompany = user.role === 'SUPER_ADMIN'
     ? allCompanies.find(c => c.id === activeCompanyId)
-    : companies.find(c => c.id === activeCompanyId)
+    : user.company // COMPANY_ADMIN uses their own company from user object
 
   const filteredEmployees = employees.filter(e => e.companyId === activeCompanyId)
 
@@ -259,8 +274,8 @@ export function ContractDashboard({
 
   const handleCopyInviteLink = () => {
     // 모바일 앱 URL (근로자 정보 입력 페이지)
-    // For network access, use local IP: http://192.168.45.187:5174
-    const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://192.168.45.187:5174';
+    // 기본값은 localhost, 네트워크 접근이 필요한 경우 환경변수로 설정
+    const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://localhost:5174';
     // Use dedicated invite page that saves to localStorage and redirects
     const link = `${mobileAppUrl}/invite.html?invite=${activeCompanyId}`;
 
@@ -356,11 +371,45 @@ export function ContractDashboard({
     toast.success("Excel 파일이 다운로드되었습니다!");
   }
 
+  const handleDeleteEmployees = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete selected employees via API
+      const deletePromises = Array.from(selectedIds).map(id =>
+        api.deleteEmployee(id)
+      );
+
+      await Promise.all(deletePromises);
+
+      // Update local state
+      const updatedEmployees = employees.filter(emp => !selectedIds.has(emp.id));
+      setEmployees(updatedEmployees);
+
+      toast.success(`${selectedIds.size}명의 근로자가 삭제되었습니다.`);
+      setSelectedIds(new Set());
+      setIsDeleteDialogOpen(false);
+    } catch (error: any) {
+      console.error('Failed to delete employees:', error);
+      toast.error(error.response?.data?.message || "근로자 삭제에 실패했습니다");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const allSelected = filteredEmployees.length > 0 && selectedIds.size === filteredEmployees.length
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredEmployees.length
 
   const selectedEmployees = employees.filter(e => selectedIds.has(e.id))
   const previewEmployee = selectedEmployees[currentPreviewIndex] || selectedEmployees[0]
+
+  // 선택된 근로자 중 발송/체결된 근로자가 있는지 확인
+  const hasProcessedEmployees = selectedEmployees.some(
+    emp => emp.status === 'completed' || emp.status === 'sent'
+  )
+  // 선택된 근로자 중 발송 가능한(draft) 근로자만 있는지 확인
+  const hasDraftEmployees = selectedEmployees.some(emp => emp.status === 'draft')
 
   const today = new Date()
   
@@ -445,13 +494,25 @@ export function ContractDashboard({
              </Button>
            )}
 
+           {/* 삭제 버튼 */}
+           <Button
+             variant="outline"
+             className="bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300"
+             disabled={selectedIds.size === 0}
+             onClick={() => setIsDeleteDialogOpen(true)}
+           >
+              <Trash2 className="mr-2 h-4 w-4" />
+              삭제
+           </Button>
+
            {/* 근로조건 수정 */}
            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
             <DialogTrigger asChild>
-              <Button 
+              <Button
                 variant="outline"
                 className="bg-white hover:bg-slate-50 text-slate-700 border-slate-300"
-                disabled={selectedIds.size === 0}
+                disabled={selectedIds.size === 0 || hasProcessedEmployees}
+                title={hasProcessedEmployees ? "발송/체결된 근로자는 근로조건을 수정할 수 없습니다" : ""}
               >
                 <Settings className="mr-2 h-4 w-4" />
                 근로조건 수정
@@ -507,11 +568,12 @@ export function ContractDashboard({
 
            {/* 서명 및 발송 */}
           <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-            <Button 
-              variant={selectedIds.size > 0 ? "default" : "outline"}
-              className={selectedIds.size > 0 ? "bg-blue-600 hover:bg-blue-700 text-white" : "text-slate-500"}
-              disabled={selectedIds.size === 0}
+            <Button
+              variant={selectedIds.size > 0 && hasDraftEmployees ? "default" : "outline"}
+              className={selectedIds.size > 0 && hasDraftEmployees ? "bg-blue-600 hover:bg-blue-700 text-white" : "text-slate-500"}
+              disabled={selectedIds.size === 0 || !hasDraftEmployees}
               onClick={handleOpenPreview}
+              title={!hasDraftEmployees && selectedIds.size > 0 ? "발송 전 상태의 근로자만 발송할 수 있습니다" : ""}
             >
               <Send className="mr-2 h-4 w-4" />
               서명 및 발송
@@ -823,20 +885,12 @@ export function ContractDashboard({
           <TableBody>
             {filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => {
-                const isDisabled = employee.status === 'completed' || employee.status === 'sent';
-                const disabledReason = employee.status === 'completed'
-                  ? '이미 계약이 완료된 근로자입니다'
-                  : employee.status === 'sent'
-                  ? '이미 계약서가 발송된 근로자입니다'
-                  : '';
                 return (
-                  <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"} className={isDisabled ? 'opacity-60' : ''}>
+                  <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"}>
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(employee.id)}
                         onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
-                        disabled={isDisabled}
-                        title={disabledReason}
                       />
                     </TableCell>
                   <TableCell className="font-medium">{employee.name}</TableCell>
@@ -1074,6 +1128,50 @@ export function ContractDashboard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              정말 삭제하시겠습니까?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                선택된 <span className="font-bold text-slate-900">{selectedIds.size}명</span>의 근로자를 삭제합니다.
+              </p>
+              <p className="text-red-500 font-medium">
+                삭제된 데이터는 복구할 수 없습니다.
+              </p>
+              {selectedIds.size > 0 && (
+                <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-2">삭제 대상:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {employees
+                      .filter(emp => selectedIds.has(emp.id))
+                      .map(emp => (
+                        <Badge key={emp.id} variant="secondary" className="text-xs">
+                          {emp.name}
+                        </Badge>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteEmployees}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? "삭제 중..." : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

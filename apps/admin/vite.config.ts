@@ -17,5 +17,9 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, '../../packages/shared'),
     },
   },
+  server: {
+    port: 5173,
+    host: true, // Allow access from network
+  },
 })
 

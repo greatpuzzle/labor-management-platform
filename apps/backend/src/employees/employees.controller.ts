@@ -93,11 +93,23 @@ export class EmployeesController {
     return this.employeesService.update(id, updateEmployeeDto);
   }
 
-  // 직원 삭제 (SUPER_ADMIN만 가능)
+  // 직원 삭제 (SUPER_ADMIN 또는 자기 회사 COMPANY_ADMIN)
   @Delete('employees/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Request() req) {
+    const employee = await this.employeesService.findOne(id);
+
+    // SUPER_ADMIN은 모든 직원 삭제 가능
+    // COMPANY_ADMIN은 자기 회사 직원만 삭제 가능
+    if (
+      req.user.role !== UserRole.SUPER_ADMIN &&
+      req.user.companyId !== employee.companyId
+    ) {
+      throw new ForbiddenException(
+        'You can only delete employees from your own company',
+      );
+    }
+
     return this.employeesService.remove(id);
   }
 }

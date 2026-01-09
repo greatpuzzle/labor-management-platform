@@ -61,8 +61,8 @@ export class ExcelExportService {
       const monthlyData = this.aggregateMonthlyData(workRecords, year);
 
       const row = [
-        company.businessNumber || '', // 사업자등록번호 (TODO: Company 모델에 추가 필요)
-        employee.residentNumber || '', // 주민등록번호 (TODO: Employee 모델에 추가 필요)
+        company.businessNumber || '', // 사업자등록번호
+        employee.residentNumber || '', // 주민등록번호
         idx + 1, // 주민순번
         employee.name,
         employee.phone,

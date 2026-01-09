@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { Volume2, Check, ArrowRight, Eraser, PenTool, FileDown } from "lucide-react";
+import { Volume2, Check, ArrowRight, Eraser, PenTool, FileDown, ZoomIn, ZoomOut, Image } from "lucide-react";
 import { toast } from "sonner";
 import { companies } from '@shared/data';
 import html2canvas from 'html2canvas';
@@ -21,6 +21,8 @@ export function EmployeeContractApp({ onClose, onWorkStart, employeeName = "홍�
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [signedContractImage, setSignedContractImage] = useState<string | null>(null);
   
   // Data for contract
   const today = new Date();
@@ -226,12 +228,35 @@ export function EmployeeContractApp({ onClose, onWorkStart, employeeName = "홍�
     };
   }, []);
 
-  const handleSignComplete = () => {
+  const handleSignComplete = async () => {
       const canvas = canvasRef.current;
       if (canvas) {
           setSignatureDataUrl(canvas.toDataURL('image/png'));
       }
       setStep('completed');
+
+      // 서명 완료 후 계약서 이미지 캡처
+      setTimeout(async () => {
+          if (contractRef.current) {
+              try {
+                  contractRef.current.style.display = 'block';
+                  const contractCanvas = await html2canvas(contractRef.current, {
+                      scale: 2,
+                      useCORS: true,
+                      logging: false,
+                      windowWidth: 794,
+                      height: 1123,
+                      width: 794,
+                      backgroundColor: '#ffffff'
+                  });
+                  const imgData = contractCanvas.toDataURL('image/png');
+                  setSignedContractImage(imgData);
+                  console.log('✅ 서명된 계약서 이미지 저장 완료');
+              } catch (error) {
+                  console.error('계약서 이미지 캡처 실패:', error);
+              }
+          }
+      }, 100);
   };
 
   const handleDownloadPDF = async () => {
@@ -269,6 +294,19 @@ export function EmployeeContractApp({ onClose, onWorkStart, employeeName = "홍�
           console.error("PDF generation failed", error);
           toast.error("다운로드에 실패했습니다.", { id: toastId });
       }
+  };
+
+  const handleSaveImage = () => {
+      if (!signedContractImage) {
+          toast.error("계약서 이미지를 준비 중입니다...");
+          return;
+      }
+
+      const link = document.createElement('a');
+      link.download = `${employeeName}_근로계약서.png`;
+      link.href = signedContractImage;
+      link.click();
+      toast.success("이미지가 저장되었습니다.");
   };
 
   return (
@@ -504,24 +542,51 @@ export function EmployeeContractApp({ onClose, onWorkStart, employeeName = "홍�
       {step === 'full' && (
         <div className="min-h-screen bg-slate-100 flex justify-center">
             <div className="w-full max-w-md flex flex-col h-screen relative bg-white">
-                {/* Sticky Header */}
+                {/* Sticky Header with Zoom Controls */}
                 <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-10 shrink-0 shadow-sm">
                     <h2 className="text-lg font-bold text-black">근로계약서 검토</h2>
-                    <Button 
-                        onClick={handleTTS}
-                        variant="ghost"
-                        size="sm"
-                        className={`h-10 text-black hover:bg-slate-100 rounded-lg px-3 flex items-center gap-2 ${isSpeaking ? 'bg-green-50 hover:bg-green-100' : ''}`}
-                    >
-                        <Volume2 className={`h-5 w-5 ${isSpeaking ? 'text-green-600 animate-pulse' : ''}`} />
-                        <span className="text-sm font-semibold">{isSpeaking ? '읽는 중...' : '읽어주기'}</span>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                        >
+                            <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs font-medium w-12 text-center">{Math.round(zoom * 100)}%</span>
+                        <Button
+                            onClick={() => setZoom(Math.min(2, zoom + 0.1))}
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                        >
+                            <ZoomIn className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            onClick={handleTTS}
+                            variant="ghost"
+                            size="sm"
+                            className={`h-9 px-2 ${isSpeaking ? 'bg-green-50' : ''}`}
+                        >
+                            <Volume2 className={`h-4 w-4 ${isSpeaking ? 'text-green-600 animate-pulse' : ''}`} />
+                        </Button>
+                    </div>
                 </header>
 
-                {/* Scrollable Content - Replicating ContractDashboard Layout */}
+                {/* Scrollable Content - A4 Ratio (210mm x 297mm ≈ 0.707) */}
                 <ScrollArea className="flex-1 bg-slate-50">
-                    <div className="p-4 sm:p-6 pb-32 flex justify-center">
-                        <div className="bg-white shadow-lg border border-slate-200 p-6 sm:p-8 w-full text-slate-900 font-serif leading-relaxed text-sm">
+                    <div className="p-4 pb-32 flex justify-center">
+                        <div
+                            className="bg-white shadow-2xl border border-slate-300 p-8 text-slate-900 font-serif leading-relaxed transition-transform origin-top"
+                            style={{
+                                width: '210mm',
+                                minHeight: '297mm',
+                                transform: `scale(${zoom})`,
+                                transformOrigin: 'top center',
+                                marginBottom: `${(zoom - 1) * 297}mm`
+                            }}
+                        >
                             
                             {/* Contract Header */}
                             <div className="border-[2px] border-black py-3 px-2 text-center mb-6 shrink-0">
@@ -803,13 +868,22 @@ export function EmployeeContractApp({ onClose, onWorkStart, employeeName = "홍�
                     근무 시작하기
                 </Button>
 
-                <Button
-                    className="w-full h-14 text-lg font-bold bg-white/20 hover:bg-white/30 text-[rgb(0,0,0)] rounded-2xl shadow-lg backdrop-blur-sm border border-white/30"
-                    onClick={handleDownloadPDF}
-                >
-                    <FileDown className="mr-2 h-5 w-5" />
-                    계약서 PDF 저장
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        className="flex-1 h-14 text-base font-bold bg-white/20 hover:bg-white/30 text-[rgb(0,0,0)] rounded-2xl shadow-lg backdrop-blur-sm border border-white/30"
+                        onClick={handleDownloadPDF}
+                    >
+                        <FileDown className="mr-1 h-5 w-5" />
+                        PDF
+                    </Button>
+                    <Button
+                        className="flex-1 h-14 text-base font-bold bg-white/20 hover:bg-white/30 text-[rgb(0,0,0)] rounded-2xl shadow-lg backdrop-blur-sm border border-white/30"
+                        onClick={handleSaveImage}
+                    >
+                        <Image className="mr-1 h-5 w-5" />
+                        이미지
+                    </Button>
+                </div>
 
                 <Button
                     variant="ghost"
