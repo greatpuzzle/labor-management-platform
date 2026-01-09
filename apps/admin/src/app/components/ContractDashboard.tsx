@@ -259,9 +259,10 @@ export function ContractDashboard({
 
   const handleCopyInviteLink = () => {
     // 모바일 앱 URL (근로자 정보 입력 페이지)
-    const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://localhost:5174';
-    // Use hash instead of query params for better compatibility
-    const link = `${mobileAppUrl}/#invite=${activeCompanyId}`;
+    // For network access, use local IP: http://192.168.45.187:5174
+    const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://192.168.45.187:5174';
+    // Use dedicated invite page that saves to localStorage and redirects
+    const link = `${mobileAppUrl}/invite.html?invite=${activeCompanyId}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
