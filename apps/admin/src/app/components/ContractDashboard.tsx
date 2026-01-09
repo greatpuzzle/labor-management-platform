@@ -821,15 +821,20 @@ export function ContractDashboard({
           <TableBody>
             {filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => {
-                const isCompleted = employee.status === 'completed';
+                const isDisabled = employee.status === 'completed' || employee.status === 'sent';
+                const disabledReason = employee.status === 'completed'
+                  ? '이미 계약이 완료된 근로자입니다'
+                  : employee.status === 'sent'
+                  ? '이미 계약서가 발송된 근로자입니다'
+                  : '';
                 return (
-                  <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"} className={isCompleted ? 'opacity-60' : ''}>
+                  <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"} className={isDisabled ? 'opacity-60' : ''}>
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(employee.id)}
                         onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
-                        disabled={isCompleted}
-                        title={isCompleted ? '이미 계약이 완료된 근로자입니다' : ''}
+                        disabled={isDisabled}
+                        title={disabledReason}
                       />
                     </TableCell>
                   <TableCell className="font-medium">{employee.name}</TableCell>

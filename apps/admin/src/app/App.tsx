@@ -330,7 +330,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
-      <SidebarInset>
+      <SidebarInset className="ml-[16rem]">
         <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 bg-white">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
