@@ -7,6 +7,16 @@
     <meta name="description" content="근로자 계약 관리 모바일 앱" />
     <title>근로자 계약 관리</title>
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      // URL 파라미터가 사라지기 전에 보존
+      console.log('[HTML] Initial URL:', window.location.href);
+      const urlParams = new URLSearchParams(window.location.search);
+      const inviteParam = urlParams.get('invite');
+      if (inviteParam) {
+        console.log('[HTML] Saving invite to localStorage:', inviteParam);
+        localStorage.setItem('pendingInvite', inviteParam);
+      }
+    </script>
   </head>
 
   <body>

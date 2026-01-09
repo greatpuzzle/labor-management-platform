@@ -21,15 +21,38 @@ export default function App() {
   useEffect(() => {
     console.log('[Mobile App] Full URL:', window.location.href);
     console.log('[Mobile App] URL search:', window.location.search);
-    const params = new URLSearchParams(window.location.search);
-    const invite = params.get('invite');
+    console.log('[Mobile App] URL hash:', window.location.hash);
+
+    // Try query params first
+    let params = new URLSearchParams(window.location.search);
+    let invite = params.get('invite');
+
+    // If not found in query params, try hash
+    if (!invite && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      invite = hashParams.get('invite');
+      console.log('[Mobile App] Hash params:', Object.fromEntries(hashParams.entries()));
+    }
+
+    // If still not found, try localStorage (saved by index.html)
+    if (!invite) {
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        console.log('[Mobile App] Found invite in localStorage:', pendingInvite);
+        invite = pendingInvite;
+        // Clear it after using
+        localStorage.removeItem('pendingInvite');
+      }
+    }
+
     console.log('[Mobile App] All URL params:', Object.fromEntries(params.entries()));
     console.log('[Mobile App] Invite link detected:', invite);
+
     if (invite) {
       setInviteCompanyId(invite);
       loadCompanyName(invite);
     } else {
-      console.log('[Mobile App] No invite parameter found in URL');
+      console.log('[Mobile App] No invite parameter found in URL, hash, or localStorage');
     }
   }, []);
 
