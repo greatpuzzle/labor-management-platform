@@ -889,7 +889,7 @@ export function ContractDashboard({
                   </TableCell>
                 </TableRow>
               );
-            }))
+            })
             ) : (
                <TableRow>
                   <TableCell colSpan={9} className="h-24 text-center text-slate-500">
