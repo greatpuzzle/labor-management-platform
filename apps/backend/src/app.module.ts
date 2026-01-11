@@ -9,6 +9,8 @@ import { EmployeesModule } from './employees/employees.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WorkRecordsModule } from './work-records/work-records.module';
+import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { WorkRecordsModule } from './work-records/work-records.module';
     ContractsModule,
     NotificationsModule,
     WorkRecordsModule,
+    WorkSchedulesModule,
+    PushNotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -51,4 +51,12 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get workRecord() {
     return this.prisma.workRecord;
   }
+
+  get workSchedule() {
+    return this.prisma.workSchedule;
+  }
+
+  get pushNotificationToken() {
+    return this.prisma.pushNotificationToken;
+  }
 }

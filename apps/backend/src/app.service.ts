@@ -43,4 +43,17 @@ export class AppService {
       database: 'connected',
     };
   }
+
+  getAppInstallLinks() {
+    return {
+      android: {
+        apkUrl: process.env.ANDROID_APK_URL || 'https://your-domain.com/downloads/labor-management.apk',
+        playStoreUrl: process.env.ANDROID_PLAY_STORE_URL || null,
+      },
+      ios: {
+        appStoreUrl: process.env.IOS_APP_STORE_URL || 'https://apps.apple.com/app/idYOUR_APP_ID',
+        testFlightUrl: process.env.IOS_TESTFLIGHT_URL || null,
+      },
+    };
+  }
 }

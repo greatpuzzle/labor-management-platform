@@ -14,4 +14,9 @@ export class AppController {
   getHealth() {
     return this.appService.getHealth();
   }
+
+  @Get('app-install-links')
+  getAppInstallLinks() {
+    return this.appService.getAppInstallLinks();
+  }
 }

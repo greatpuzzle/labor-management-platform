@@ -41,7 +41,7 @@ model Company {
 }
 
 model Employee {
-  id                        String          @id @default(cuid())
+  id                        String                 @id @default(cuid())
   companyId                 String
   name                      String
   phone                     String
@@ -55,14 +55,16 @@ model Employee {
   emergencyContactName      String
   emergencyContactPhone     String
   documentUrl               String?
-  sensitiveInfoConsent      Boolean         @default(false)
-  contractStatus            ContractStatus  @default(DRAFT)
-  createdAt                 DateTime        @default(now())
-  updatedAt                 DateTime        @updatedAt
+  sensitiveInfoConsent      Boolean                @default(false)
+  contractStatus            ContractStatus         @default(DRAFT)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
   residentNumber            String?
   contracts                 Contract[]
-  company                   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                   Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   workRecords               WorkRecord[]
+  workSchedules             WorkSchedule[]
+  pushNotificationToken     PushNotificationToken?
 
   @@index([companyId])
   @@index([contractStatus])
@@ -94,10 +96,10 @@ model WorkRecord {
   id         String     @id @default(cuid())
   employeeId String
   date       String
-  startTime  DateTime
+  startTime  DateTime?
   endTime    DateTime?
   duration   Int?
-  status     WorkStatus @default(IN_PROGRESS)
+  status     WorkStatus @default(NOT_STARTED)
   notes      String     @default("")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -107,6 +109,35 @@ model WorkRecord {
   @@index([date])
   @@index([status])
   @@map("work_records")
+}
+
+model WorkSchedule {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime @db.Date
+  tasks      String[] // 업무 목록 (JSON 배열)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+  @@map("work_schedules")
+}
+
+model PushNotificationToken {
+  id         String   @id @default(cuid())
+  employeeId String   @unique
+  token      String   @unique
+  platform   String // 'android' | 'ios'
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([token])
+  @@map("push_notification_tokens")
 }
 
 enum UserRole {
@@ -126,6 +157,7 @@ enum ContractStatus {
 }
 
 enum WorkStatus {
+  NOT_STARTED
   IN_PROGRESS
   COMPLETED
 }

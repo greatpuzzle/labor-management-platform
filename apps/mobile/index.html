@@ -8,13 +8,33 @@
     <title>근로자 계약 관리</title>
     <link rel="manifest" href="/manifest.json" />
     <script>
+      // 백엔드 API URL 명시적으로 설정
+      // 컴퓨터의 실제 IP 주소 (네트워크에서 접근 가능하도록)
+      window.VITE_API_URL = 'http://192.168.45.219:3000';
+      console.log('[HTML] Backend API URL set to:', window.VITE_API_URL);
+      
       // URL 파라미터가 사라지기 전에 보존
       console.log('[HTML] Initial URL:', window.location.href);
+      console.log('[HTML] Pathname:', window.location.pathname);
+      console.log('[HTML] Search:', window.location.search);
+      console.log('[HTML] Hash:', window.location.hash);
+      
+      // Query parameter에서 invite 확인
       const urlParams = new URLSearchParams(window.location.search);
-      const inviteParam = urlParams.get('invite');
+      let inviteParam = urlParams.get('invite');
+      
+      // Hash parameter에서 invite 확인
+      if (!inviteParam && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        inviteParam = hashParams.get('invite');
+      }
+      
       if (inviteParam) {
+        console.log('[HTML] Invite parameter found:', inviteParam);
         console.log('[HTML] Saving invite to localStorage:', inviteParam);
         localStorage.setItem('pendingInvite', inviteParam);
+      } else {
+        console.log('[HTML] No invite parameter found in URL');
       }
     </script>
   </head>

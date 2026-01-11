@@ -13,36 +13,83 @@ export class WorkRecordsService {
   ) {}
 
   async startWork(employeeId: string, startWorkDto: StartWorkDto) {
-    // 직원 존재 확인
+    // 직원 존재 확인 및 계약 체결 완료 여부 확인
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
-      include: { company: true },
+      include: { 
+        company: true,
+        contracts: {
+          where: {
+            status: 'COMPLETED',
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
+      },
     });
 
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${employeeId} not found`);
     }
 
+    // 계약 체결 완료 여부 확인
+    if (employee.contractStatus !== 'COMPLETED' && employee.contracts.length === 0) {
+      throw new NotFoundException('계약 체결이 완료되지 않은 근로자는 근무 기록을 남길 수 없습니다. 계약서 서명을 먼저 완료해주세요.');
+    }
+
     const startTime = new Date(startWorkDto.startTime);
     const date = startTime.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // 근무 기록 생성
-    const workRecord = await this.prisma.workRecord.create({
-      data: {
+    // 오늘 날짜의 기존 기록이 있는지 확인
+    const existingRecord = await this.prisma.workRecord.findFirst({
+      where: {
         employeeId,
         date,
-        startTime,
-        status: WorkStatus.IN_PROGRESS,
-        notes: startWorkDto.notes || '',
       },
-      include: {
-        employee: {
-          include: {
-            company: true,
-          },
-        },
+      orderBy: {
+        createdAt: 'desc',
       },
     });
+
+    // 기존 기록이 있고 NOT_STARTED 상태면 업데이트, 아니면 새로 생성
+    let workRecord;
+    if (existingRecord && existingRecord.status === WorkStatus.NOT_STARTED) {
+      workRecord = await this.prisma.workRecord.update({
+        where: { id: existingRecord.id },
+        data: {
+          startTime,
+          status: WorkStatus.IN_PROGRESS,
+          notes: startWorkDto.notes || '',
+        },
+        include: {
+          employee: {
+            include: {
+              company: true,
+            },
+          },
+        },
+      });
+    } else {
+      // 근무 기록 생성
+      workRecord = await this.prisma.workRecord.create({
+        data: {
+          employeeId,
+          date,
+          startTime,
+          status: WorkStatus.IN_PROGRESS,
+          notes: startWorkDto.notes || '',
+        },
+        include: {
+          employee: {
+            include: {
+              company: true,
+            },
+          },
+        },
+      });
+    }
 
     return workRecord;
   }
@@ -66,6 +113,10 @@ export class WorkRecordsService {
 
     if (workRecord.status === WorkStatus.COMPLETED) {
       throw new Error('This work record is already completed');
+    }
+
+    if (!workRecord.startTime) {
+      throw new Error('Work record has not been started yet');
     }
 
     const endTime = new Date(endWorkDto.endTime);

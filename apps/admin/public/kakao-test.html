@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>카카오톡 메시지 테스트 - 그레이트퍼즐</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 {
+      color: #333;
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    button {
+      flex: 1;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+    .preview-section {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      background: #f8f9fa;
+      border-radius: 12px;
+      display: none;
+    }
+    .preview-section.show {
+      display: block;
+    }
+    .preview-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+    .kakao-message {
+      background: #FEE500;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      position: relative;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .kakao-message::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: 20px;
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-bottom: 10px solid #FEE500;
+    }
+    .kakao-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .kakao-logo {
+      width: 24px;
+      height: 24px;
+      background: #000;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 0.75rem;
+    }
+    .kakao-channel {
+      font-weight: 600;
+      color: #000;
+      font-size: 0.9rem;
+    }
+    .kakao-content {
+      color: #000;
+      white-space: pre-line;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+    .kakao-button {
+      background: #000;
+      color: white;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .kakao-button:hover {
+      background: #333;
+    }
+    .info-box {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+    .info-box p {
+      color: #1976d2;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .link-section {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    .link-item {
+      margin-bottom: 0.75rem;
+    }
+    .link-item:last-child {
+      margin-bottom: 0;
+    }
+    .link-label {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 0.25rem;
+    }
+    .link-value {
+      font-size: 0.9rem;
+      color: #667eea;
+      word-break: break-all;
+      font-family: monospace;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 1rem;
+      color: #666;
+    }
+    .loading.show {
+      display: block;
+    }
+    @media (max-width: 600px) {
+      .container {
+        padding: 1.5rem;
+      }
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 카카오톡 메시지 테스트</h1>
+    <p class="subtitle">카카오톡 채널 연결 전까지 메시지 미리보기 및 테스트</p>
+
+    <div class="form-group">
+      <label for="employeeName">근로자 이름</label>
+      <input type="text" id="employeeName" placeholder="홍길동" value="홍길동">
+    </div>
+
+    <div class="form-group">
+      <label for="employeePhone">전화번호</label>
+      <input type="text" id="employeePhone" placeholder="010-1234-5678" value="010-1234-5678">
+    </div>
+
+    <div class="form-group">
+      <label for="contractId">계약서 ID (선택사항)</label>
+      <input type="text" id="contractId" placeholder="test-contract-id">
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" onclick="previewMessage()">📋 메시지 미리보기</button>
+      <button class="btn-secondary" onclick="testMessage()">🚀 테스트 전송 (Mock)</button>
+    </div>
+
+    <div class="loading" id="loading">로딩 중...</div>
+
+    <div class="preview-section" id="previewSection">
+      <div class="preview-title">카카오톡 메시지 미리보기</div>
+      
+      <div class="kakao-message" id="kakaoMessage">
+        <div class="kakao-header">
+          <div class="kakao-logo">K</div>
+          <div class="kakao-channel">그레이트퍼즐</div>
+        </div>
+        <div class="kakao-content" id="kakaoContent"></div>
+        <div class="kakao-button" id="kakaoButton" onclick="window.open(document.getElementById('contractLink').textContent, '_blank')">
+          계약서 확인하기
+        </div>
+      </div>
+
+      <div class="link-section">
+        <div class="link-item">
+          <div class="link-label">계약서 링크:</div>
+          <div class="link-value" id="contractLink"></div>
+        </div>
+        <div class="link-item">
+          <div class="link-label">앱 설치 링크:</div>
+          <div class="link-value" id="appInstallLink"></div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <p>
+          <strong>💡 참고:</strong> 이 메시지는 실제로 전송되지 않습니다. 
+          카카오톡 채널 연결 후 실제 전송이 가능합니다.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3000'
+      : `http://${window.location.hostname}:3000`;
+
+    async function previewMessage() {
+      const employeeName = document.getElementById('employeeName').value || '홍길동';
+      const employeePhone = document.getElementById('employeePhone').value || '010-1234-5678';
+      const contractId = document.getElementById('contractId').value;
+
+      const loading = document.getElementById('loading');
+      const previewSection = document.getElementById('previewSection');
+
+      loading.classList.add('show');
+      previewSection.classList.remove('show');
+
+      try {
+        const params = new URLSearchParams({
+          employeeName,
+          employeePhone,
+        });
+        if (contractId) {
+          params.append('contractId', contractId);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/notifications/preview?${params}`);
+        const data = await response.json();
+
+        // 메시지 내용 표시
+        document.getElementById('kakaoContent').textContent = data.preview.formattedMessage;
+        document.getElementById('contractLink').textContent = data.preview.contractLink;
+        document.getElementById('appInstallLink').textContent = data.preview.appInstallLink;
+
+        previewSection.classList.add('show');
+      } catch (error) {
+        alert('메시지 미리보기를 불러올 수 없습니다: ' + error.message);
+        console.error('Preview error:', error);
+      } finally {
+        loading.classList.remove('show');
+      }
+    }
+
+    async function testMessage() {
+      const employeeName = document.getElementById('employeeName').value || '홍길동';
+      const employeePhone = document.getElementById('employeePhone').value || '010-1234-5678';
+      const contractId = document.getElementById('contractId').value;
+
+      const loading = document.getElementById('loading');
+      const previewSection = document.getElementById('previewSection');
+
+      loading.classList.add('show');
+      previewSection.classList.remove('show');
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/notifications/test`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            employeeName,
+            employeePhone,
+            contractId: contractId || undefined,
+          }),
+        });
+
+        const data = await response.json();
+
+        // 메시지 내용 표시 (버튼만 제공하므로 링크는 메시지에 포함하지 않음)
+        const messageContent = `[그레이트퍼즐] 근로계약서가 발송되었습니다.
+
+${employeeName}님, 근로계약서를 확인하고 서명해주세요.
+
+문의: 그레이트퍼즐 고객센터`;
+
+        document.getElementById('kakaoContent').textContent = messageContent;
+        document.getElementById('contractLink').textContent = data.links.contract;
+        document.getElementById('appInstallLink').textContent = data.links.appInstall;
+
+        previewSection.classList.add('show');
+
+        alert('✅ 테스트 전송 완료!\n\n백엔드 콘솔에서 로그를 확인하세요.\n실제 카카오톡 메시지는 전송되지 않았습니다.');
+      } catch (error) {
+        alert('테스트 전송에 실패했습니다: ' + error.message);
+        console.error('Test error:', error);
+      } finally {
+        loading.classList.remove('show');
+      }
+    }
+
+    // 페이지 로드 시 기본 미리보기 표시
+    window.addEventListener('load', () => {
+      previewMessage();
+    });
+  </script>
+</body>
+</html>
+

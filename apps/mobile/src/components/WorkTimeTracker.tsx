@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Clock, Play, Square, Calendar, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { api } from '@shared/api';
 
 interface WorkRecord {
   id: string;
@@ -16,27 +17,57 @@ interface WorkRecord {
 
 interface WorkTimeTrackerProps {
   employeeName: string;
+  employeeId: string | null;
 }
 
-export function WorkTimeTracker({ employeeName }: WorkTimeTrackerProps) {
+export function WorkTimeTracker({ employeeName, employeeId }: WorkTimeTrackerProps) {
+  console.log('[WorkTimeTracker] 컴포넌트 렌더링');
+  console.log('[WorkTimeTracker] employeeName:', employeeName);
+  console.log('[WorkTimeTracker] employeeId:', employeeId);
+  
   const [currentWork, setCurrentWork] = useState<WorkRecord | null>(null);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [elapsedTime, setElapsedTime] = useState(0); // 초 단위
+  const [loading, setLoading] = useState(false);
 
-  // Load records from localStorage
+  // Load records from API
   useEffect(() => {
-    const saved = localStorage.getItem('work-records');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setWorkRecords(parsed);
-
-      // Check if there's an in-progress work
-      const inProgress = parsed.find((r: WorkRecord) => r.status === 'in_progress');
-      if (inProgress) {
-        setCurrentWork(inProgress);
-      }
+    console.log('[WorkTimeTracker] useEffect 실행, employeeId:', employeeId);
+    if (!employeeId) {
+      console.warn('[WorkTimeTracker] employeeId가 없어 근로 기록을 불러올 수 없습니다.');
+      return;
     }
-  }, []);
+
+    const loadWorkRecords = async () => {
+      try {
+        const records = await api.getWorkRecordsByEmployee(employeeId);
+        
+        // Convert API records to local format
+        const converted: WorkRecord[] = records.map((record: any) => ({
+          id: record.id,
+          date: record.date,
+          startTime: record.startTime,
+          endTime: record.endTime || undefined,
+          duration: record.duration || undefined,
+          status: (record.status || 'IN_PROGRESS').toLowerCase() as 'in_progress' | 'completed',
+          notes: record.notes || '',
+        }));
+
+        setWorkRecords(converted);
+
+        // Check if there's an in-progress work
+        const inProgress = converted.find(r => r.status === 'in_progress');
+        if (inProgress) {
+          setCurrentWork(inProgress);
+        }
+      } catch (error: any) {
+        console.error('[WorkTimeTracker] Failed to load work records:', error);
+        toast.error('근로 기록을 불러오는데 실패했습니다.');
+      }
+    };
+
+    loadWorkRecords();
+  }, [employeeId]);
 
   // Timer for elapsed time
   useEffect(() => {
@@ -52,55 +83,80 @@ export function WorkTimeTracker({ employeeName }: WorkTimeTrackerProps) {
     return () => clearInterval(interval);
   }, [currentWork]);
 
-  // Save records to localStorage
-  const saveRecords = (records: WorkRecord[]) => {
-    localStorage.setItem('work-records', JSON.stringify(records));
-    setWorkRecords(records);
-  };
+  const handleStartWork = async () => {
+    if (!employeeId) {
+      toast.error("근로자 정보가 없어 근무를 시작할 수 없습니다.");
+      return;
+    }
 
-  const handleStartWork = () => {
     if (currentWork) {
       toast.error("이미 근무 중입니다.");
       return;
     }
 
-    const now = new Date();
-    const newWork: WorkRecord = {
-      id: Date.now().toString(),
-      date: now.toISOString().split('T')[0],
-      startTime: now.toISOString(),
-      status: 'in_progress',
-      notes: '달성', // 기본값
-    };
+    setLoading(true);
+    try {
+      const now = new Date();
+      const workRecord = await api.createWorkRecord(employeeId, {
+        startTime: now.toISOString(),
+        notes: '달성',
+      });
 
-    setCurrentWork(newWork);
-    const updated = [...workRecords, newWork];
-    saveRecords(updated);
-    toast.success("근무를 시작했습니다.");
+      const newWork: WorkRecord = {
+        id: workRecord.id,
+        date: workRecord.date,
+        startTime: workRecord.startTime,
+        status: (workRecord.status || 'IN_PROGRESS').toLowerCase() as 'in_progress' | 'completed',
+        notes: workRecord.notes || '달성',
+      };
+
+      setCurrentWork(newWork);
+      setWorkRecords(prev => [...prev, newWork]);
+      toast.success("근무를 시작했습니다.");
+    } catch (error: any) {
+      console.error('[WorkTimeTracker] Failed to start work:', error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || '근무 시작에 실패했습니다.';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEndWork = () => {
+  const handleEndWork = async () => {
     if (!currentWork) {
       toast.error("근무 중이 아닙니다.");
       return;
     }
 
-    const now = new Date();
-    const start = new Date(currentWork.startTime);
-    const durationMinutes = Math.floor((now.getTime() - start.getTime()) / (1000 * 60));
+    setLoading(true);
+    try {
+      const now = new Date();
+      const updatedRecord = await api.updateWorkRecord(currentWork.id, {
+        endTime: now.toISOString(),
+      });
 
-    const completed: WorkRecord = {
-      ...currentWork,
-      endTime: now.toISOString(),
-      duration: durationMinutes,
-      status: 'completed',
-    };
+      const completed: WorkRecord = {
+        id: updatedRecord.id,
+        date: updatedRecord.date,
+        startTime: updatedRecord.startTime,
+        endTime: updatedRecord.endTime || undefined,
+        duration: updatedRecord.duration || undefined,
+        status: updatedRecord.status.toLowerCase() as 'in_progress' | 'completed',
+        notes: updatedRecord.notes || '',
+      };
 
-    const updated = workRecords.map(r => r.id === currentWork.id ? completed : r);
-    saveRecords(updated);
-    setCurrentWork(null);
-    setElapsedTime(0);
-    toast.success(`근무를 종료했습니다. (${durationMinutes}분)`);
+      setWorkRecords(prev => prev.map(r => r.id === currentWork.id ? completed : r));
+      setCurrentWork(null);
+      setElapsedTime(0);
+      
+      const durationMinutes = completed.duration || 0;
+      toast.success(`근무를 종료했습니다. (${Math.floor(durationMinutes / 60)}시간 ${durationMinutes % 60}분)`);
+    } catch (error: any) {
+      console.error('[WorkTimeTracker] Failed to end work:', error);
+      toast.error(error.response?.data?.message || '근무 종료에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -157,10 +213,11 @@ export function WorkTimeTracker({ employeeName }: WorkTimeTrackerProps) {
                 </p>
                 <Button
                   onClick={handleEndWork}
-                  className="w-full h-16 text-lg font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl"
+                  disabled={loading}
+                  className="w-full h-16 text-lg font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl disabled:opacity-50"
                 >
                   <Square className="h-5 w-5 mr-2" />
-                  근무 종료
+                  {loading ? '처리 중...' : '근무 종료'}
                 </Button>
               </>
             ) : (
@@ -176,10 +233,11 @@ export function WorkTimeTracker({ employeeName }: WorkTimeTrackerProps) {
                 </p>
                 <Button
                   onClick={handleStartWork}
-                  className="w-full h-16 text-lg font-bold bg-[#00C950] hover:bg-[#009e3f] text-white rounded-xl"
+                  disabled={loading || !employeeId}
+                  className="w-full h-16 text-lg font-bold bg-[#00C950] hover:bg-[#009e3f] text-white rounded-xl disabled:opacity-50"
                 >
                   <Play className="h-5 w-5 mr-2" />
-                  근무 시작
+                  {loading ? '처리 중...' : '근무 시작'}
                 </Button>
               </>
             )}

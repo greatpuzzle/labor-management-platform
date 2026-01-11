@@ -16,6 +16,7 @@ import { WorkRecordsService } from './work-records.service';
 import { StartWorkDto } from './dto/start-work.dto';
 import { EndWorkDto } from './dto/end-work.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '@prisma/client';
 import type { Response as ExpressResponse } from 'express';
 
@@ -39,8 +40,9 @@ export class WorkRecordsController {
   }
 
   // 직원의 근무 기록 조회
+  // 인증된 사용자는 권한 체크, 미인증 사용자(근로자)는 자신의 기록만 조회 가능
   @Get('employees/:employeeId/work-records')
-  @UseGuards(JwtAuthGuard)
+  @Public()
   async findByEmployee(
     @Param('employeeId') employeeId: string,
     @Query('year') year?: string,
@@ -56,16 +58,20 @@ export class WorkRecordsController {
       throw new ForbiddenException('Employee not found');
     }
 
-    // SUPER_ADMIN은 모든 직원의 근무 기록 조회 가능
-    // COMPANY_ADMIN은 자기 회사 직원만 가능
-    if (
-      req.user.role !== UserRole.SUPER_ADMIN &&
-      req.user.companyId !== employee.companyId
-    ) {
-      throw new ForbiddenException(
-        'You can only view work records for employees from your own company',
-      );
+    // 인증된 사용자인 경우 권한 체크
+    if (req.user) {
+      // SUPER_ADMIN은 모든 직원의 근무 기록 조회 가능
+      // COMPANY_ADMIN은 자기 회사 직원만 가능
+      if (
+        req.user.role !== UserRole.SUPER_ADMIN &&
+        req.user.companyId !== employee.companyId
+      ) {
+        throw new ForbiddenException(
+          'You can only view work records for employees from your own company',
+        );
+      }
     }
+    // 인증되지 않은 사용자(근로자)는 자신의 기록 조회 가능 (모바일 앱에서 사용)
 
     const query: any = {};
     if (year) query.year = parseInt(year, 10);

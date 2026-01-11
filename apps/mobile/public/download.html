@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>앱 설치 안내 - 그레이트퍼즐</title>
+  <!-- 앱 설치 링크 설정 (환경 변수로 설정 필요) -->
+  <meta name="android-apk-url" content="https://your-domain.com/downloads/labor-management.apk">
+  <meta name="ios-app-store-url" content="https://apps.apple.com/app/idYOUR_APP_ID">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #2E4F4F 0%, #1a3333 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: white;
+    }
+    .container {
+      max-width: 500px;
+      width: 100%;
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: #2E4F4F;
+      border-radius: 20px;
+      margin: 0 auto 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: bold;
+      color: white;
+    }
+    h1 {
+      color: #1a3333;
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+      font-weight: 700;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    .install-steps {
+      text-align: left;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .step:last-child {
+      margin-bottom: 0;
+    }
+    .step-number {
+      width: 28px;
+      height: 28px;
+      background: #2E4F4F;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-title {
+      font-weight: 600;
+      color: #1a3333;
+      margin-bottom: 0.25rem;
+      font-size: 0.95rem;
+    }
+    .step-description {
+      color: #666;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+    .btn {
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: block;
+    }
+    .btn-primary {
+      background: #2E4F4F;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1a3333;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(46, 79, 79, 0.3);
+    }
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+    .info-box {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1.5rem;
+      text-align: left;
+    }
+    .info-box p {
+      color: #2e7d32;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin: 0;
+    }
+    @media (max-width: 480px) {
+      .container {
+        padding: 1.5rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">GP</div>
+    <h1>앱 설치 안내</h1>
+    <p class="subtitle">그레이트퍼즐 근로자 계약 관리 앱</p>
+
+    <div class="install-steps" id="androidSteps" style="display: none;">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">APK 파일 다운로드</div>
+          <div class="step-description">아래 "Android 앱 다운로드" 버튼을 눌러 APK 파일을 다운로드하세요.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">앱 설치 허용</div>
+          <div class="step-description">
+            다운로드한 APK 파일을 열고 "알 수 없는 소스에서 설치 허용"을 선택하세요.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">앱 설치 및 실행</div>
+          <div class="step-description">설치가 완료되면 앱을 실행하여 계약서를 확인하세요.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="install-steps" id="iosSteps" style="display: none;">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">App Store에서 설치</div>
+          <div class="step-description">아래 "App Store에서 설치" 버튼을 눌러 App Store로 이동하세요.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">앱 다운로드</div>
+          <div class="step-description">App Store에서 "다운로드" 또는 "받기" 버튼을 눌러 앱을 설치하세요.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">앱 실행</div>
+          <div class="step-description">설치가 완료되면 앱을 실행하여 계약서를 확인하세요.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <a href="/" id="appLink" class="btn btn-primary">앱으로 이동하기</a>
+      <button class="btn btn-secondary" onclick="window.history.back()">이전으로</button>
+    </div>
+
+    <div class="info-box">
+      <p>
+        <strong>💡 팁:</strong> 앱을 설치하면 더 빠르고 편리하게 근로계약서를 확인하고 서명할 수 있습니다.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // URL 파라미터에서 redirect 경로 가져오기
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectPath = urlParams.get('redirect') || '/';
+    
+    // Capacitor 앱 설치 여부 확인
+    const isCapacitorApp = window.Capacitor !== undefined;
+    const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    const isAndroid = /android/i.test(window.navigator.userAgent);
+    
+    // 이미 Capacitor 앱이 설치되어 있으면 자동으로 원래 페이지로 리다이렉트
+    if (isCapacitorApp) {
+      window.location.href = redirectPath;
+    }
+
+    // 앱 설치 링크 가져오기
+    // 1. 메타 태그에서 읽기 (빌드 시 주입 가능)
+    // 2. 백엔드 API에서 가져오기 (동적 설정)
+    let androidApkUrl = 'https://your-domain.com/downloads/labor-management.apk';
+    let androidPlayStoreUrl = null;
+    let iosAppStoreUrl = 'https://apps.apple.com/app/idYOUR_APP_ID';
+    let iosTestFlightUrl = null;
+    
+    // 메타 태그에서 읽기
+    const androidMeta = document.querySelector('meta[name="android-apk-url"]');
+    const androidPlayStoreMeta = document.querySelector('meta[name="android-play-store-url"]');
+    const iosMeta = document.querySelector('meta[name="ios-app-store-url"]');
+    const iosTestFlightMeta = document.querySelector('meta[name="ios-testflight-url"]');
+    
+    if (androidMeta) {
+      androidApkUrl = androidMeta.getAttribute('content') || androidApkUrl;
+    }
+    if (androidPlayStoreMeta) {
+      androidPlayStoreUrl = androidPlayStoreMeta.getAttribute('content');
+    }
+    if (iosMeta) {
+      iosAppStoreUrl = iosMeta.getAttribute('content') || iosAppStoreUrl;
+    }
+    if (iosTestFlightMeta) {
+      iosTestFlightUrl = iosTestFlightMeta.getAttribute('content');
+    }
+    
+    // 백엔드 API에서 앱 설치 링크 가져오기 (선택사항)
+    // API URL은 환경 변수 또는 기본값 사용
+    // 개발 환경: http://localhost:3000
+    // 프로덕션: 같은 origin 또는 환경 변수에서 설정
+    const getApiBaseUrl = () => {
+      // window 객체에 설정된 API URL 확인 (빌드 시 주입 가능)
+      if (typeof window !== 'undefined' && (window as any).API_BASE_URL) {
+        return (window as any).API_BASE_URL;
+      }
+      // 현재 페이지가 localhost인 경우
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000';
+      }
+      // 프로덕션: 같은 origin의 API 사용 (백엔드가 같은 도메인인 경우)
+      // 또는 환경 변수에서 설정
+      return `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}`;
+    };
+    
+    const apiBaseUrl = getApiBaseUrl();
+    
+    fetch(`${apiBaseUrl}/api/app-install-links`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.android?.apkUrl) androidApkUrl = data.android.apkUrl;
+        if (data.android?.playStoreUrl) androidPlayStoreUrl = data.android.playStoreUrl;
+        if (data.ios?.appStoreUrl) iosAppStoreUrl = data.ios.appStoreUrl;
+        if (data.ios?.testFlightUrl) iosTestFlightUrl = data.ios.testFlightUrl;
+        
+        // 링크가 업데이트되면 버튼 다시 생성
+        updateInstallButtons();
+      })
+      .catch(error => {
+        console.log('[App Install] API 호출 실패, 메타 태그 값 사용:', error);
+        // API 실패 시 메타 태그 값 사용 (이미 설정됨)
+        createInstallButtons();
+      });
+    
+    function updateInstallButtons() {
+      const buttonGroup = document.querySelector('.button-group');
+      if (!buttonGroup) return;
+      
+      // 기존 설치 버튼 제거
+      const existingButtons = buttonGroup.querySelectorAll('.install-btn');
+      existingButtons.forEach(btn => btn.remove());
+      
+      // 플랫폼별 설치 버튼 다시 생성
+      createInstallButtons();
+    }
+    
+    const androidSteps = document.getElementById('androidSteps');
+    const iosSteps = document.getElementById('iosSteps');
+    
+    function createInstallButtons() {
+      const buttonGroup = document.querySelector('.button-group');
+      if (!buttonGroup) return;
+      
+      if (isAndroid) {
+        // Android: Play Store 우선, 없으면 APK 다운로드
+        if (androidPlayStoreUrl) {
+          const playStoreBtn = document.createElement('a');
+          playStoreBtn.className = 'btn btn-primary install-btn';
+          playStoreBtn.textContent = 'Play Store에서 설치';
+          playStoreBtn.href = androidPlayStoreUrl;
+          playStoreBtn.target = '_blank';
+          buttonGroup.insertBefore(playStoreBtn, buttonGroup.firstChild);
+        } else if (androidApkUrl && androidApkUrl !== 'https://your-domain.com/downloads/labor-management.apk') {
+          const apkBtn = document.createElement('a');
+          apkBtn.className = 'btn btn-primary install-btn';
+          apkBtn.textContent = 'Android 앱 다운로드 (APK)';
+          apkBtn.href = androidApkUrl;
+          apkBtn.target = '_blank';
+          buttonGroup.insertBefore(apkBtn, buttonGroup.firstChild);
+        }
+        
+        if (androidSteps) {
+          androidSteps.style.display = 'block';
+        }
+        
+        // 기존 "앱으로 이동하기" 버튼 숨기기
+        const appLink = document.getElementById('appLink');
+        if (appLink) {
+          appLink.style.display = 'none';
+        }
+      } else if (isIOS) {
+        // iOS: TestFlight 우선, 없으면 App Store
+        if (iosTestFlightUrl) {
+          const testFlightBtn = document.createElement('a');
+          testFlightBtn.className = 'btn btn-primary install-btn';
+          testFlightBtn.textContent = 'TestFlight에서 설치';
+          testFlightBtn.href = iosTestFlightUrl;
+          testFlightBtn.target = '_blank';
+          buttonGroup.insertBefore(testFlightBtn, buttonGroup.firstChild);
+        } else if (iosAppStoreUrl && iosAppStoreUrl !== 'https://apps.apple.com/app/idYOUR_APP_ID') {
+          const appStoreBtn = document.createElement('a');
+          appStoreBtn.className = 'btn btn-primary install-btn';
+          appStoreBtn.textContent = 'App Store에서 설치';
+          appStoreBtn.href = iosAppStoreUrl;
+          appStoreBtn.target = '_blank';
+          buttonGroup.insertBefore(appStoreBtn, buttonGroup.firstChild);
+        }
+        
+        if (iosSteps) {
+          iosSteps.style.display = 'block';
+        }
+        
+        // 기존 "앱으로 이동하기" 버튼 숨기기
+        const appLink = document.getElementById('appLink');
+        if (appLink) {
+          appLink.style.display = 'none';
+        }
+      }
+    }
+    
+    // 초기 설치 버튼 생성 (메타 태그 값 사용)
+    createInstallButtons();
+    
+    // 앱으로 이동 링크 업데이트 (설치 버튼이 없는 경우에만 표시)
+    const appLink = document.getElementById('appLink');
+    if (appLink && appLink.style.display !== 'none') {
+      appLink.href = redirectPath;
+    }
+
+    // Capacitor 앱 설치 후 복귀 감지
+    const checkAppInstalled = () => {
+      if (window.Capacitor !== undefined) {
+        window.location.href = redirectPath;
+      }
+    };
+
+    // visibilitychange 이벤트로 앱 설치 후 복귀 감지
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        checkAppInstalled();
+      }
+    });
+
+    // 주기적으로 확인 (iOS에서 앱 설치 후 돌아올 때)
+    const checkInterval = setInterval(() => {
+      if (window.Capacitor !== undefined) {
+        clearInterval(checkInterval);
+        window.location.href = redirectPath;
+      }
+    }, 1000);
+
+    // 30초 후 인터벌 종료
+    setTimeout(() => {
+      clearInterval(checkInterval);
+    }, 30000);
+  </script>
+</body>
+</html>
+

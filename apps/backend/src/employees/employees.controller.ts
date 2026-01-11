@@ -16,6 +16,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller()
@@ -50,21 +51,26 @@ export class EmployeesController {
   }
 
   // 특정 직원 상세 조회
+  // 인증된 사용자는 권한 체크, 미인증 사용자(근로자)는 자신의 정보만 조회 가능
   @Get('employees/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Public()
   async findOne(@Param('id') id: string, @Request() req) {
     const employee = await this.employeesService.findOne(id);
 
-    // SUPER_ADMIN은 모든 직원 조회 가능
-    // COMPANY_ADMIN은 자기 회사 직원만 조회 가능
-    if (
-      req.user.role !== UserRole.SUPER_ADMIN &&
-      req.user.companyId !== employee.companyId
-    ) {
-      throw new ForbiddenException(
-        'You can only access employees from your own company',
-      );
+    // 인증된 사용자인 경우 권한 체크
+    if (req.user) {
+      // SUPER_ADMIN은 모든 직원 조회 가능
+      // COMPANY_ADMIN은 자기 회사 직원만 조회 가능
+      if (
+        req.user.role !== UserRole.SUPER_ADMIN &&
+        req.user.companyId !== employee.companyId
+      ) {
+        throw new ForbiddenException(
+          'You can only access employees from your own company',
+        );
+      }
     }
+    // 인증되지 않은 사용자(근로자)는 자신의 정보 조회 가능 (모바일 앱에서 사용)
 
     return employee;
   }

@@ -39,15 +39,16 @@ const disabilityTypes = [
   "청각장애",
   "언어장애",
   "지적장애",
-  "자폐성장애",
   "정신장애",
+  "자폐성장애",
   "신장장애",
   "심장장애",
   "호흡기장애",
   "간장애",
   "안면장애",
-  "장루·요루장애",
+  "장루요루장애",
   "뇌전증장애",
+  "국가유공",
 ];
 
 export function EmployeeRegistration({ companyName, onSubmit, onHome }: EmployeeRegistrationProps) {
@@ -193,9 +194,9 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
            <form onSubmit={handleSubmit} className="space-y-10 px-2">
               {/* 기본 정보 섹션 */}
               <div className="space-y-5">
-                <h3 className="text-base font-bold text-slate-800 border-b pb-2 mb-4">기본 정보</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-slate-700 text-sm">성명<span className="text-red-500">*</span></Label>
+                <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-6">기본 정보</h3>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="name" className="text-slate-700 text-sm mb-2 block">성명<span className="text-red-500">*</span></Label>
                   <Input
                     id="name"
                     placeholder="실명 입력"
@@ -205,8 +206,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-slate-700 text-sm">휴대폰 번호<span className="text-red-500">*</span></Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="phone" className="text-slate-700 text-sm mb-2 block">휴대폰 번호<span className="text-red-500">*</span></Label>
                   <Input
                     id="phone"
                     placeholder="010-0000-0000"
@@ -217,8 +218,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     onChange={(e) => setPhone(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dob" className="text-slate-700 text-sm">생년월일<span className="text-red-500">*</span></Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="dob" className="text-slate-700 text-sm mb-2 block">생년월일<span className="text-red-500">*</span></Label>
                   <Input
                     id="dob"
                     placeholder="YYYY-MM-DD (예: 1990-01-01)"
@@ -235,10 +236,10 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
 
               {/* 장애 정보 섹션 */}
               <div className="space-y-6">
-                <h3 className="text-base font-bold text-slate-800 border-b pb-2 mb-4">장애 정보</h3>
+                <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-6">장애 정보</h3>
 
-                <div className="space-y-3">
-                  <Label className="text-slate-700 text-sm">장애 정도<span className="text-red-500">*</span></Label>
+                <div className="space-y-3 mb-4">
+                  <Label className="text-slate-700 text-sm mb-2 block">장애 정도<span className="text-red-500">*</span></Label>
                   <RadioGroup value={disabilityLevel} onValueChange={(value) => setDisabilityLevel(value as '중증' | '경증')}>
                     <div className="flex gap-6">
                       <div className="flex items-center space-x-2">
@@ -253,8 +254,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                   </RadioGroup>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="disabilityType" className="text-slate-700 text-sm">장애 유형<span className="text-red-500">*</span></Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="disabilityType" className="text-slate-700 text-sm mb-2 block">장애 유형<span className="text-red-500">*</span></Label>
                   <Select value={disabilityType} onValueChange={setDisabilityType} required>
                     <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
                       <SelectValue placeholder="장애 유형을 선택하세요" />
@@ -269,8 +270,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="disabilityRecognitionDate" className="text-slate-700 text-sm">장애 인정일<span className="text-red-500">*</span></Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="disabilityRecognitionDate" className="text-slate-700 text-sm mb-2 block">장애 인정일<span className="text-red-500">*</span></Label>
                   <Input
                     id="disabilityRecognitionDate"
                     type="text"
@@ -287,9 +288,9 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
 
               {/* 비상연락망 섹션 */}
               <div className="space-y-6">
-                <h3 className="text-base font-bold text-slate-800 border-b pb-2 mb-4">비상연락망 (보호자)</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="emergencyContactName" className="text-slate-700 text-sm">보호자 성명<span className="text-red-500">*</span></Label>
+                <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-6">비상연락망 (보호자)</h3>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="emergencyContactName" className="text-slate-700 text-sm mb-2 block">보호자 성명<span className="text-red-500">*</span></Label>
                   <Input
                     id="emergencyContactName"
                     placeholder="보호자 이름 입력"
@@ -299,8 +300,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     onChange={(e) => setEmergencyContactName(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="emergencyContactPhone" className="text-slate-700 text-sm">보호자 전화번호<span className="text-red-500">*</span></Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="emergencyContactPhone" className="text-slate-700 text-sm mb-2 block">보호자 전화번호<span className="text-red-500">*</span></Label>
                   <Input
                     id="emergencyContactPhone"
                     placeholder="010-0000-0000"
@@ -315,11 +316,11 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
 
               {/* 증빙서류 업로드 섹션 */}
               <div className="space-y-6">
-                <h3 className="text-base font-bold text-slate-800 border-b pb-2 mb-4">증빙서류</h3>
+                <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-6">증빙서류</h3>
 
                 {/* 복지카드 */}
-                <div className="space-y-2">
-                  <Label htmlFor="welfareCard" className="text-slate-700 text-sm">복지카드 사본</Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="welfareCard" className="text-slate-700 text-sm mb-2 block">복지카드 사본</Label>
                   <div className="relative">
                     <Input
                       id="welfareCard"
@@ -330,15 +331,15 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     />
                   </div>
                   {welfareCardFile && (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
+                    <p className="text-xs text-green-600 flex items-center gap-1 mt-2">
                       <Check className="h-3 w-3" /> {welfareCardFile.name}
                     </p>
                   )}
                 </div>
 
                 {/* 중증장애인확인서 */}
-                <div className="space-y-2">
-                  <Label htmlFor="severeCertificate" className="text-slate-700 text-sm">중증장애인확인서</Label>
+                <div className="space-y-2 mb-4">
+                  <Label htmlFor="severeCertificate" className="text-slate-700 text-sm mb-2 block">중증장애인확인서</Label>
                   <div className="relative">
                     <Input
                       id="severeCertificate"
@@ -349,7 +350,7 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     />
                   </div>
                   {severeCertificateFile && (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
+                    <p className="text-xs text-green-600 flex items-center gap-1 mt-2">
                       <Check className="h-3 w-3" /> {severeCertificateFile.name}
                     </p>
                   )}
@@ -357,7 +358,7 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
               </div>
 
               {/* 동의 섹션 */}
-              <div className="space-y-4">
+              <div className="space-y-4 mt-6">
                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
                   <div className="flex items-start gap-3">
                     <Checkbox

@@ -56,12 +56,12 @@ export class ContractsController {
   }
 
   // 계약서 서명 (근로자가 모바일 앱에서 서명 - 인증 불필요)
-  @Post('employees/:employeeId/contracts/sign')
+  @Post('contracts/:contractId/sign')
   signContract(
-    @Param('employeeId') employeeId: string,
+    @Param('contractId') contractId: string,
     @Body() signContractDto: SignContractDto,
   ) {
-    return this.contractsService.signContract(employeeId, signContractDto);
+    return this.contractsService.signContract(contractId, signContractDto);
   }
 
   // 직원의 모든 계약서 조회

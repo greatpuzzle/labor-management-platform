@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/s
 import { AppSidebar } from "./components/AppSidebar"
 import { ContractDashboard } from "./components/ContractDashboard"
 import { WorkRecordsDashboard } from "./components/WorkRecordsDashboard"
+import { DocumentDownloadDashboard } from "./components/DocumentDownloadDashboard"
 import { Login } from "./components/Login"
 import { EmployeeRegistration } from "./components/EmployeeRegistration"
 import { EmployeeContractApp } from "./components/EmployeeContractApp"
@@ -107,9 +108,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('contracts');
 
-  // Super Admin - 회사 선택 기능
+  // Super Admin - 회사 선택 기능 (각 탭별로 독립적으로 관리)
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [selectedCompanyIdForContracts, setSelectedCompanyIdForContracts] = useState<string | null>(null);
+  const [selectedCompanyIdForWorkRecords, setSelectedCompanyIdForWorkRecords] = useState<string | null>(null);
+  const [selectedCompanyIdForDocuments, setSelectedCompanyIdForDocuments] = useState<string | null>(null);
 
   // State for Employee Contract App Flow
   const [showEmployeeContract, setShowEmployeeContract] = useState(false);
@@ -129,6 +132,10 @@ export default function App() {
         } else if (parsedUser.companyId) {
           // 일반 관리자는 자신의 회사 직원 로드
           loadEmployees(parsedUser.companyId);
+          // 회사 선택 state도 설정
+          setSelectedCompanyIdForContracts(parsedUser.companyId);
+          setSelectedCompanyIdForWorkRecords(parsedUser.companyId);
+          setSelectedCompanyIdForDocuments(parsedUser.companyId);
         }
       } catch (error) {
         console.error('Failed to parse user from localStorage:', error);
@@ -139,12 +146,20 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  // 슈퍼 관리자가 회사를 선택했을 때
+  // 슈퍼 관리자가 계약 관리 탭에서 회사를 선택했을 때
   useEffect(() => {
-    if (user?.role === 'SUPER_ADMIN' && selectedCompanyId) {
-      loadEmployees(selectedCompanyId);
+    if (user?.role === 'SUPER_ADMIN' && selectedCompanyIdForContracts) {
+      loadEmployees(selectedCompanyIdForContracts);
     }
-  }, [selectedCompanyId]);
+  }, [selectedCompanyIdForContracts]);
+
+  // 슈퍼 관리자가 서류 다운로드 탭에서 회사를 선택했을 때
+  useEffect(() => {
+    if (user?.role === 'SUPER_ADMIN' && selectedCompanyIdForDocuments) {
+      // 서류 다운로드 탭은 자체적으로 직원을 로드하므로 여기서는 로드하지 않음
+      // DocumentDownloadDashboard 내부에서 직접 로드
+    }
+  }, [selectedCompanyIdForDocuments]);
 
   // Check for invite link
   useEffect(() => {
@@ -171,9 +186,11 @@ export default function App() {
     try {
       const companies = await api.getCompanies();
       setAllCompanies(companies);
-      // 첫 번째 회사를 기본으로 선택
+      // 첫 번째 회사를 기본으로 선택 (각 탭별로)
       if (companies.length > 0) {
-        setSelectedCompanyId(companies[0].id);
+        setSelectedCompanyIdForContracts(companies[0].id);
+        setSelectedCompanyIdForWorkRecords(companies[0].id);
+        setSelectedCompanyIdForDocuments(companies[0].id);
       }
     } catch (error: any) {
       console.error('Failed to load companies:', error);
@@ -332,7 +349,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
-      <SidebarInset className="ml-[16rem]">
+      <SidebarInset>
         <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 bg-white">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
@@ -344,7 +361,11 @@ export default function App() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{activeTab === 'contracts' ? '계약 관리' : '근무 현황'}</BreadcrumbPage>
+                  <BreadcrumbPage>
+                    {activeTab === 'contracts' ? '계약 관리' : 
+                     activeTab === 'work-records' ? '근무 현황' : 
+                     activeTab === 'documents' ? '서류 다운로드' : '계약 관리'}
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -352,11 +373,7 @@ export default function App() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 md:p-8 bg-slate-50/50">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="contracts">계약 관리</TabsTrigger>
-              <TabsTrigger value="work-records">근무 현황</TabsTrigger>
-            </TabsList>
-            <TabsContent value="contracts" className="mt-6">
+            <TabsContent value="contracts" className="mt-0">
               <ContractDashboard
                 stampImage={stampImage}
                 setStampImage={setStampImage}
@@ -364,18 +381,34 @@ export default function App() {
                 employees={employees}
                 setEmployees={setEmployees}
                 allCompanies={allCompanies}
-                selectedCompanyId={selectedCompanyId}
-                onCompanyChange={setSelectedCompanyId}
+                selectedCompanyId={selectedCompanyIdForContracts}
+                onCompanyChange={setSelectedCompanyIdForContracts}
               />
             </TabsContent>
-            <TabsContent value="work-records" className="mt-6">
+            <TabsContent value="work-records" className="mt-0">
               <WorkRecordsDashboard
                 employees={employees}
-                companyId={
+                user={user}
+                allCompanies={allCompanies}
+                selectedCompanyId={
                   user.role === 'SUPER_ADMIN'
-                    ? (selectedCompanyId || '')
+                    ? (selectedCompanyIdForWorkRecords || '')
                     : (user.companyId || '')
                 }
+                onCompanyChange={setSelectedCompanyIdForWorkRecords}
+              />
+            </TabsContent>
+            <TabsContent value="documents" className="mt-0">
+              <DocumentDownloadDashboard
+                user={user}
+                employees={employees}
+                allCompanies={allCompanies}
+                selectedCompanyId={
+                  user.role === 'SUPER_ADMIN'
+                    ? (selectedCompanyIdForDocuments || '')
+                    : (user.companyId || '')
+                }
+                onCompanyChange={setSelectedCompanyIdForDocuments}
               />
             </TabsContent>
           </Tabs>

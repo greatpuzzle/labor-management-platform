@@ -72,6 +72,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { User, Employee } from "@shared/data" // Import types
 import { toast } from "sonner"
 import { StampManager } from "./StampManager"
@@ -113,6 +114,9 @@ export function ContractDashboard({
   // Company Selection State (for COMPANY_ADMIN only)
   const [localSelectedCompanyId, setLocalSelectedCompanyId] = React.useState<string>("")
 
+  // Employee Filter State (현재 근로자 / 이전 근로자)
+  const [employeeFilter, setEmployeeFilter] = React.useState<'current' | 'previous'>('current')
+
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
   const [editWorkingHours, setEditWorkingHours] = React.useState("13:00 ~ 16:30")
@@ -124,6 +128,20 @@ export function ContractDashboard({
   const [isSigned, setIsSigned] = React.useState(false)
   const [currentPreviewIndex, setCurrentPreviewIndex] = React.useState(0)
   const [zoomLevel, setZoomLevel] = React.useState(0.8)
+  const [viewingCompletedContract, setViewingCompletedContract] = React.useState(false)
+  const [completedContractData, setCompletedContractData] = React.useState<any | null>(null)
+  const [loadingContract, setLoadingContract] = React.useState(false)
+
+  // KakaoTalk Message Preview State
+  const [isKakaoPreviewOpen, setIsKakaoPreviewOpen] = React.useState(false)
+  const [kakaoPreviewData, setKakaoPreviewData] = React.useState<{
+    employeeName: string;
+    employeePhone: string;
+    message: string;
+    contractLink: string;
+    appInstallLink: string;
+    isMock: boolean;
+  } | null>(null)
 
   // Stamp Management State (Only used for Super Admin here, Company Admin uses Sidebar)
   const [isStampModalOpen, setIsStampModalOpen] = React.useState(false)
@@ -153,7 +171,51 @@ export function ContractDashboard({
     ? allCompanies.find(c => c.id === activeCompanyId)
     : user.company // COMPANY_ADMIN uses their own company from user object
 
-  const filteredEmployees = employees.filter(e => e.companyId === activeCompanyId)
+  // 계약 기간 파싱 함수
+  const parseContractPeriod = (period: string): { start: Date; end: Date } | null => {
+    try {
+      // 형식: "2026.01.02 ~ 2027.01.01"
+      const match = period.match(/(\d{4})\.(\d{2})\.(\d{2})\s*~\s*(\d{4})\.(\d{2})\.(\d{2})/)
+      if (!match) return null
+      
+      const [, startYear, startMonth, startDay, endYear, endMonth, endDay] = match
+      const start = new Date(parseInt(startYear), parseInt(startMonth) - 1, parseInt(startDay))
+      const end = new Date(parseInt(endYear), parseInt(endMonth) - 1, parseInt(endDay))
+      
+      return { start, end }
+    } catch {
+      return null
+    }
+  }
+
+  // 계약 기간이 현재 유효한지 확인
+  const isContractActive = (period: string): boolean => {
+    const parsed = parseContractPeriod(period)
+    if (!parsed) return false
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const start = new Date(parsed.start)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(parsed.end)
+    end.setHours(23, 59, 59, 999)
+    
+    return today >= start && today <= end
+  }
+
+  // 회사별 필터링
+  const companyFilteredEmployees = employees.filter(e => e.companyId === activeCompanyId)
+  
+  // 현재/이전 근로자 필터링
+  const filteredEmployees = companyFilteredEmployees.filter(employee => {
+    if (employeeFilter === 'current') {
+      // 현재 근로자: 계약 기간이 현재 시점에 유효한 경우
+      return isContractActive(employee.contractPeriod)
+    } else {
+      // 이전 근로자: 계약 기간이 만료된 경우
+      return !isContractActive(employee.contractPeriod)
+    }
+  })
 
   // If no company is selected (especially for super admin), show a message
   if (!currentCompany) {
@@ -174,13 +236,16 @@ export function ContractDashboard({
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredEmployees.map(e => e.id)))
+      // 모든 근로자 선택 (삭제 기능을 위해 발송/완료된 근로자도 선택 가능)
+      const allEmployeeIds = filteredEmployees.map(e => e.id)
+      setSelectedIds(new Set(allEmployeeIds))
     } else {
       setSelectedIds(new Set())
     }
   }
 
   const handleSelectOne = (id: string, checked: boolean) => {
+    // 모든 근로자 선택 가능 (삭제 기능을 위해 발송/완료된 근로자도 선택 가능)
     const newSelected = new Set(selectedIds)
     if (checked) {
       newSelected.add(id)
@@ -228,8 +293,36 @@ export function ContractDashboard({
   const handleOpenPreview = () => {
     setIsSigned(false)
     setCurrentPreviewIndex(0)
-    setZoomLevel(0.8) 
+    setZoomLevel(0.8)
+    setViewingCompletedContract(false)
+    setCompletedContractData(null)
     setIsPreviewOpen(true)
+  }
+  
+  // 계약 완료 상태일 때 계약서 보기 핸들러
+  const handleViewCompletedContract = async (employeeId: string) => {
+    setLoadingContract(true);
+    try {
+      const contracts = await api.getContractsByEmployee(employeeId);
+      const completedContract = contracts.find((c: any) => c.status === 'COMPLETED' || c.status === 'completed');
+      
+      if (completedContract && completedContract.pdfUrl) {
+        setCompletedContractData(completedContract);
+        setViewingCompletedContract(true);
+        setSelectedIds(new Set([employeeId]));
+        setIsPreviewOpen(true);
+        setCurrentPreviewIndex(0);
+        setZoomLevel(0.8);
+      } else {
+        console.warn('[ContractDashboard] Contract found but pdfUrl is missing:', completedContract);
+        toast.error('서명된 계약서를 찾을 수 없습니다. 계약서가 서명 완료되지 않았거나 PDF가 저장되지 않았습니다.');
+      }
+    } catch (error: any) {
+      console.error('[ContractDashboard] Failed to load contract:', error);
+      toast.error('계약서를 불러오는데 실패했습니다: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoadingContract(false);
+    }
   }
 
   const handleSign = () => {
@@ -240,7 +333,30 @@ export function ContractDashboard({
     try {
       // Send contract to selected employees via API
       const selectedEmployees = employees.filter(emp => selectedIds.has(emp.id));
-      const sendPromises = selectedEmployees.map(emp =>
+      
+      // 발송/완료된 근로자가 포함되어 있는지 확인
+      const processedEmployees = selectedEmployees.filter(
+        emp => emp.status === 'sent' || emp.status === 'completed'
+      )
+      
+      if (processedEmployees.length > 0) {
+        toast.error("발송할 수 없는 근로자가 포함되어 있습니다", {
+          description: `${processedEmployees.map(e => e.name).join(', ')}님의 계약서는 이미 발송되었거나 체결이 완료되었습니다.`,
+        })
+        return
+      }
+      
+      // 발송 전 상태의 근로자만 필터링
+      const draftEmployees = selectedEmployees.filter(emp => emp.status === 'draft')
+      
+      if (draftEmployees.length === 0) {
+        toast.error("발송 가능한 근로자가 없습니다", {
+          description: "발송 전 상태의 근로자만 선택할 수 있습니다.",
+        })
+        return
+      }
+      
+      const sendPromises = draftEmployees.map(emp =>
         api.sendContract(emp.id, {
           workingHours: emp.workingHours,
           salary: emp.salary,
@@ -248,11 +364,11 @@ export function ContractDashboard({
         })
       );
 
-      await Promise.all(sendPromises);
+      const results = await Promise.all(sendPromises);
 
       // Update local state
       const updatedEmployees = employees.map(emp => {
-        if (selectedIds.has(emp.id) && emp.status !== 'completed') {
+        if (selectedIds.has(emp.id) && emp.status === 'draft') {
           return { ...emp, status: 'sent' as const };
         }
         return emp;
@@ -260,8 +376,33 @@ export function ContractDashboard({
 
       setEmployees(updatedEmployees);
 
+      // 카카오톡 메시지 미리보기 데이터 준비 (첫 번째 근로자 기준)
+      if (results.length > 0) {
+        const firstResult = results[0] as any;
+        const firstEmployee = draftEmployees[0];
+        const notification = firstResult.notification || {};
+        
+        // 계약서 링크 생성
+        const contractLink = firstResult.links?.contractView || 
+          (firstResult.contract ? `${import.meta.env.VITE_MOBILE_APP_URL || 'http://192.168.45.78:5174'}/contract/${firstResult.contract.id}` : '');
+        
+        // 메시지 내용 생성 (버튼만 제공하므로 링크는 메시지에 포함하지 않음)
+        const message = `[그레이트퍼즐] 근로계약서가 발송되었습니다.\n\n${firstEmployee.name}님, 근로계약서를 확인하고 서명해주세요.\n\n문의: 그레이트퍼즐 고객센터`;
+        
+        setKakaoPreviewData({
+          employeeName: firstEmployee.name,
+          employeePhone: firstEmployee.phone,
+          message: message,
+          contractLink: contractLink,
+          appInstallLink: firstResult.links?.appInstall || `${import.meta.env.VITE_MOBILE_APP_URL || 'http://192.168.45.78:5174'}/download.html`,
+          isMock: notification.mock !== false, // 기본값 true (API 키가 없으면 mock)
+        });
+        setIsKakaoPreviewOpen(true);
+      }
+
       toast.success("계약서가 발송되었습니다", {
-        description: `${selectedIds.size}명의 근로자에게 전자계약서를 전송했습니다.`,
+        description: `${draftEmployees.length}명의 근로자에게 전자계약서를 전송했습니다. ${results[0]?.notification?.mock ? '(개발 모드: 카카오톡 메시지는 실제 전송되지 않았습니다)' : ''}`,
+        duration: 5000,
       });
 
       setIsPreviewOpen(false);
@@ -322,47 +463,132 @@ export function ContractDashboard({
     }
   }
 
+  // 장애 유형 매핑 함수 (두 번째 이미지 참고)
+  const mapDisabilityType = (disabilityType: string): string => {
+    const mapping: { [key: string]: string } = {
+      '지체장애': '10',
+      '뇌병변장애': '20',
+      '시각장애': '30',
+      '청각장애': '40',
+      '언어장애': '50',
+      '지적장애': '60',
+      '정신장애': '70',
+      '자폐성장애': '80',
+      '신장장애': '90',
+      '심장장애': 'A0',
+      '호흡기장애': 'B0',
+      '간장애': 'C0',
+      '안면장애': 'D0',
+      '장루요루장애': 'E0',
+      '뇌전증장애': 'F0',
+      '국가유공': 'G0',
+    };
+    return mapping[disabilityType] || disabilityType;
+  }
+
   const handleExportToExcel = () => {
-    const company = companies.find(c => c.id === selectedCompanyId);
+    const company = allCompanies.find(c => c.id === activeCompanyId) || currentCompany;
     if (!company) return;
 
-    // Excel 데이터 준비 (한국장애인고용공단 양식)
-    const excelData = filteredEmployees.map(emp => ({
-      '성명': emp.name,
-      '생년월일': emp.dob,
-      '전화번호': emp.phone,
-      '장애정도': emp.disabilityLevel,
-      '장애유형': emp.disabilityType,
-      '장애인정일': emp.disabilityRecognitionDate,
-      '비상연락망(성명)': emp.emergencyContactName,
-      '비상연락망(전화)': emp.emergencyContactPhone,
-      '계약기간': emp.contractPeriod,
-      '근로시간': emp.workingHours,
-      '급여': emp.salary,
-      '계약상태': emp.status === 'completed' ? '완료' : emp.status === 'sent' ? '발송' : '작성중',
-    }));
+    if (filteredEmployees.length === 0) {
+      toast.error("다운로드할 근로자가 없습니다.");
+      return;
+    }
+
+    // 첫 번째 이미지의 컬럼 구조에 맞춘 Excel 데이터 준비
+    const excelData = filteredEmployees.map(emp => {
+      // 중증여부: 중증이면 Y, 경증이면 N
+      const isSevere = emp.disabilityLevel === '중증' ? 'Y' : 'N';
+      
+      // 장애 유형 코드로 변환
+      const disabilityTypeCode = mapDisabilityType(emp.disabilityType);
+      
+      // 국가유공(G0)이 아닌 경우 장애인정구분과 상이등급 설정
+      const isNationalMerit = disabilityTypeCode === 'G0';
+      const disabilityClassification = isNationalMerit ? '' : '1'; // 장애인정구분
+      const disabilityGrade = isNationalMerit ? '' : '00'; // 상이등급
+
+      // 예시 이미지의 기본값 적용
+      return {
+        'Column Name': '', // 빈 값
+        'Pricing Model': 'Fixed Price',
+        'Min Qty': '1',
+        'Max Qty': '999999999',
+        'UOM': 'EA',
+        'Unit Price': '10',
+        'Currency': 'USD',
+        'Effective Date': '01-01-2023',
+        'Expiration Date': '12-31-9999',
+        'Discount Type': 'None',
+        'Discount Value': '0',
+        'Discount UOM': 'None',
+        'Discount Currency': 'None',
+        'Discount Effective Date': '01-01-2023',
+        'Discount Expiration Date': '12-31-9999',
+        'Tier Type': 'None',
+        'Tier Min Qty': '0',
+        'Tier Max Qty': '0',
+        'Tier UOM': 'None',
+        'Tier Unit Price': '0',
+        'Tier Currency': 'None',
+        'Tier Effective Date': '01-01-2023',
+        'Tier Expiration Date': '12-31-9999',
+        'Tier Discount Type': 'None',
+        'Tier Discount Value': '0',
+        'Tier Discount UOM': 'None',
+        'Tier Discount Currency': 'None',
+        'Tier Discount Effective Date': '01-01-2023',
+        'Tier Discount Expiration Date': '12-31-9999',
+        'Custom Field 1': emp.name || '', // 성명
+        'Custom Field 2': emp.dob || '', // 생년월일
+        'Custom Field 3': emp.phone || '', // 전화번호
+        'Custom Field 4': disabilityTypeCode, // 장애유형 (코드)
+        'Custom Field 5': isSevere, // 중증여부: Y (중증인 경우)
+        'Custom Field 6': '1', // 근무직종: 1
+        'Custom Field 7': 'N', // N월 최저: N
+        'Custom Field 8': 'N', // N월 최저예외: N
+        'Custom Field 9': isSevere, // N월 중증여부: Y (중증인 경우)
+        'Custom Field 10': 'Y', // N월 2배수 여부: Y
+        'Custom Field 11': 'N', // N월 타지원금: N
+        'Custom Field 12': 'Y', // N월 고용보험: Y
+        'Custom Field 13': emp.disabilityRecognitionDate || '', // 장애인정일
+        'Custom Field 14': disabilityClassification, // 장애인정구분: 국가유공(G0)이 아닌 경우 '1', 그 외 ''
+        'Custom Field 15': disabilityGrade, // 상이등급: 국가유공(G0)이 아닌 경우 '00', 그 외 ''
+        'Custom Field 16': emp.emergencyContactName || '', // 비상연락망(성명)
+        'Custom Field 17': emp.emergencyContactPhone || '', // 비상연락망(전화)
+        'Custom Field 18': emp.contractPeriod || '', // 계약기간
+        'Custom Field 19': emp.workingHours || '', // 근로시간
+        'Custom Field 20': emp.salary || '', // 급여
+      };
+    });
 
     // 워크북 생성
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
 
-    // 컬럼 너비 설정
-    ws['!cols'] = [
-      { wch: 10 }, // 성명
-      { wch: 12 }, // 생년월일
-      { wch: 15 }, // 전화번호
-      { wch: 10 }, // 장애정도
-      { wch: 12 }, // 장애유형
-      { wch: 12 }, // 장애인정일
-      { wch: 12 }, // 비상연락망(성명)
-      { wch: 15 }, // 비상연락망(전화)
-      { wch: 20 }, // 계약기간
-      { wch: 15 }, // 근로시간
-      { wch: 12 }, // 급여
-      { wch: 10 }, // 계약상태
-    ];
+    // 모든 셀을 텍스트 형식으로 설정
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[cellAddress]) continue;
+        
+        // 셀 형식을 텍스트로 설정
+        ws[cellAddress].z = '@'; // 텍스트 형식
+        // 값이 숫자로 저장된 경우 문자열로 변환
+        if (typeof ws[cellAddress].v === 'number') {
+          ws[cellAddress].v = String(ws[cellAddress].v);
+          ws[cellAddress].t = 's'; // 문자열 타입
+        }
+      }
+    }
 
-    XLSX.utils.book_append_sheet(wb, ws, '근로자명단');
+    // 컬럼 너비 설정 (첫 번째 이미지의 컬럼 수에 맞춤)
+    const colWidths = Array(50).fill(15); // 50개 컬럼, 각 15 너비
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+    // 시트 이름을 Sheet1로 설정
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
 
     // 파일 다운로드
     const today = new Date().toISOString().split('T')[0];
@@ -418,7 +644,7 @@ export function ContractDashboard({
       
       {/* Top Section: Header & Company Selector */}
       <div className="flex flex-col gap-6 border-b pb-6">
-         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                  {user.role === 'SUPER_ADMIN' ? (
@@ -428,36 +654,47 @@ export function ContractDashboard({
                  )}
                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">{user.name}님, 환영합니다!</h2>
               </div>
-              <p className="text-slate-500">기업별 근로자 및 계약 관리 대시보드</p>
+              <div className="flex items-center gap-4">
+                <p className="text-slate-500">기업별 근로자 및 계약 관리 대시보드</p>
+                {/* 회사 선택 드롭다운 - 오른쪽에 배치 */}
+                {user.role === 'SUPER_ADMIN' && allCompanies.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Select value={activeCompanyId} onValueChange={onCompanyChange}>
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="회사를 선택하세요" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allCompanies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Badge variant="outline" className="font-normal text-slate-500">{filteredEmployees.length}명</Badge>
+                  </div>
+                )}
+              </div>
             </div>
          </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-2">
-             {/* 슈퍼 관리자는 드롭다운, 회사 관리자는 회사명 표시 */}
-             {user.role === 'SUPER_ADMIN' && allCompanies.length > 0 ? (
-               <div className="flex items-center gap-2">
-                 <Select value={activeCompanyId} onValueChange={onCompanyChange}>
-                   <SelectTrigger className="w-[250px]">
-                     <SelectValue placeholder="회사를 선택하세요" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     {allCompanies.map((company) => (
-                       <SelectItem key={company.id} value={company.id}>
-                         {company.name}
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-                 <Badge variant="outline" className="font-normal text-slate-500">{filteredEmployees.length}명</Badge>
-               </div>
-             ) : (
+        <div className="flex items-center gap-4">
+             {/* 회사 관리자는 회사명 표시 */}
+             {user.role === 'COMPANY_ADMIN' && (
                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                  {currentCompany?.name || ''}
                  <Badge variant="outline" className="font-normal text-slate-500">{filteredEmployees.length}명</Badge>
                </h3>
              )}
+             {/* 현재/이전 근로자 필터 */}
+             <Tabs value={employeeFilter} onValueChange={(value) => setEmployeeFilter(value as 'current' | 'previous')}>
+               <TabsList className="grid w-full grid-cols-2">
+                 <TabsTrigger value="current">현재 근로자</TabsTrigger>
+                 <TabsTrigger value="previous">이전 근로자</TabsTrigger>
+               </TabsList>
+             </Tabs>
         </div>
         
         <div className="flex items-center gap-2">
@@ -587,10 +824,15 @@ export function ContractDashboard({
                       <FileText className="h-6 w-6 text-blue-600" />
                    </div>
                    <div>
-                     <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">계약서 미리보기</DialogTitle>
+                     <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                       {viewingCompletedContract ? '서명된 계약서' : '계약서 미리보기'}
+                     </DialogTitle>
                      <DialogDescription className="text-sm text-slate-500 mt-1 hidden sm:block">
                        <span className="font-semibold text-slate-900">{currentCompany.name}</span> - 
-                       {selectedEmployees.length}명의 선택된 근로자 중 <span className="font-medium text-slate-900">{previewEmployee?.name}</span>님의 계약서
+                       {viewingCompletedContract 
+                         ? `${previewEmployee?.name}님의 서명 완료된 계약서`
+                         : `${selectedEmployees.length}명의 선택된 근로자 중 ${previewEmployee?.name}님의 계약서`
+                       }
                      </DialogDescription>
                    </div>
                  </div>
@@ -609,16 +851,21 @@ export function ContractDashboard({
 
                     <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
 
-                    {!isSigned ? (
-                      <Button onClick={handleSign} className="bg-blue-600 hover:bg-blue-700 shadow-sm whitespace-nowrap px-4 py-2 h-10 font-medium text-sm">
-                        <PenTool className="mr-2 h-4 w-4" />
-                        도장 날인
-                      </Button>
-                    ) : (
-                      <Button onClick={handleSend} className="bg-green-600 hover:bg-green-700 shadow-sm animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap px-4 py-2 h-10 font-medium text-sm">
-                        <Send className="mr-2 h-4 w-4" />
-                        발송
-                      </Button>
+                    {/* 계약 완료 상태가 아닐 때만 도장 날인/발송 버튼 표시 */}
+                    {previewEmployee && previewEmployee.status !== 'completed' && !viewingCompletedContract && (
+                      <>
+                        {!isSigned ? (
+                          <Button onClick={handleSign} className="bg-blue-600 hover:bg-blue-700 shadow-sm whitespace-nowrap px-4 py-2 h-10 font-medium text-sm">
+                            <PenTool className="mr-2 h-4 w-4" />
+                            도장 날인
+                          </Button>
+                        ) : (
+                          <Button onClick={handleSend} className="bg-green-600 hover:bg-green-700 shadow-sm animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap px-4 py-2 h-10 font-medium text-sm">
+                            <Send className="mr-2 h-4 w-4" />
+                            발송
+                          </Button>
+                        )}
+                      </>
                     )}
                     
                     <DialogClose asChild>
@@ -632,28 +879,80 @@ export function ContractDashboard({
                {/* Document Preview Area */}
                <div className="flex-1 overflow-auto bg-slate-100/80 relative flex justify-center py-10">
                   {previewEmployee && (
-                    <div 
-                      className="bg-white shadow-2xl mx-auto origin-top transition-all duration-300 ease-out border border-slate-200"
-                      style={{ 
-                        width: '210mm', 
-                        height: '297mm',
-                        transform: `scale(${zoomLevel})`,
-                        marginBottom: `${(zoomLevel - 1) * 297}mm` 
-                      }}
-                    >
-                      {/* A4 Content Container */}
-                      <div className="w-full h-full px-[20mm] py-[15mm] flex flex-col relative text-slate-900 font-serif">
-                        
-                        {/* Header */}
-                        <div className="border-[2px] border-black py-3 px-2 text-center mb-6 shrink-0">
-                           <h1 className="text-[18px] font-bold tracking-widest text-black">표준근로계약서(기간의 정함이 있는 경우)</h1>
+                    <>
+                      {/* 계약 완료 상태일 때 서명된 계약서 PDF 표시 - 발송 전 상태와 동일한 UI 스타일 사용 */}
+                      {viewingCompletedContract && completedContractData?.pdfUrl ? (
+                        <div 
+                          className="bg-white shadow-2xl mx-auto origin-top transition-all duration-300 ease-out border border-slate-200"
+                          style={{ 
+                            width: '210mm', 
+                            height: '297mm',
+                            transform: `scale(${zoomLevel})`,
+                            marginBottom: `${(zoomLevel - 1) * 297}mm`,
+                          }}
+                        >
+                          {completedContractData.pdfUrl.startsWith('data:application/pdf') ? (
+                            <iframe
+                              src={completedContractData.pdfUrl}
+                              className="border-0 w-full h-full"
+                              style={{
+                                width: '210mm',
+                                height: '297mm',
+                                minHeight: '297mm',
+                              }}
+                              title="서명된 계약서"
+                            />
+                          ) : completedContractData.pdfUrl.startsWith('data:image') ? (
+                            <img
+                              src={completedContractData.pdfUrl}
+                              alt="서명된 계약서"
+                              className="w-full h-auto"
+                              style={{
+                                width: '210mm',
+                                height: 'auto',
+                                display: 'block',
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full p-4 text-center text-slate-500 flex items-center justify-center" style={{ width: '210mm', height: '297mm' }}>
+                              <div>
+                                <p>계약서를 불러올 수 없습니다.</p>
+                                <p className="text-sm mt-2">PDF/이미지 형식이 올바르지 않습니다.</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* Main Content Area */}
-                        <div className="flex flex-col justify-start gap-1">
-                            <p className="leading-7 mb-5 text-[12.5px] text-justify shrink-0">
-                              <span className="font-bold border-b border-black inline-block min-w-[80px] text-center px-1">{currentCompany.name}</span> (이하 "사업주"라 함)과(와) <span className="font-bold border-b border-black inline-block min-w-[60px] text-center px-1">{previewEmployee.name}</span> (이하 "근로자"라 함)은 다음과 같이 근로계약을 체결한다.
-                            </p>
+                      ) : viewingCompletedContract && !completedContractData?.pdfUrl ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="text-center text-slate-500">
+                            <p className="text-lg font-medium mb-2">서명된 계약서를 불러올 수 없습니다</p>
+                            <p className="text-sm">계약서가 아직 서명 완료되지 않았거나 PDF가 저장되지 않았습니다.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* 발송 전 상태일 때 계약서 미리보기 */
+                        <div 
+                          className="bg-white shadow-2xl mx-auto origin-top transition-all duration-300 ease-out border border-slate-200"
+                          style={{ 
+                            width: '210mm', 
+                            height: '297mm',
+                            transform: `scale(${zoomLevel})`,
+                            marginBottom: `${(zoomLevel - 1) * 297}mm` 
+                          }}
+                        >
+                          {/* A4 Content Container */}
+                          <div className="w-full h-full px-[20mm] py-[15mm] flex flex-col relative text-slate-900 font-serif">
+                            
+                            {/* Header */}
+                            <div className="border-[2px] border-black py-3 px-2 text-center mb-6 shrink-0">
+                               <h1 className="text-[18px] font-bold tracking-widest text-black">표준근로계약서(기간의 정함이 있는 경우)</h1>
+                            </div>
+                            
+                            {/* Main Content Area */}
+                            <div className="flex flex-col justify-start gap-1">
+                                <p className="leading-7 mb-5 text-[12.5px] text-justify shrink-0">
+                                  <span className="font-bold border-b border-black inline-block min-w-[80px] text-center px-1">{currentCompany.name}</span> (이하 "사업주"라 함)과(와) <span className="font-bold border-b border-black inline-block min-w-[60px] text-center px-1">{previewEmployee.name}</span> (이하 "근로자"라 함)은 다음과 같이 근로계약을 체결한다.
+                                </p>
 
                             <div className="space-y-3 text-[12.5px] leading-6">
                               {/* 1. 계약기간 */}
@@ -667,7 +966,7 @@ export function ContractDashboard({
                               <div className="flex items-baseline">
                                  <span className="font-bold mr-1 w-5 shrink-0">2.</span>
                                  <span className="font-bold mr-2 w-24 shrink-0">근 무 장 소 :</span>
-                                 <span className="flex-1">본사 사무실</span>
+                                 <span className="flex-1">본사 지정장소</span>
                               </div>
 
                               {/* 3. 업무내용 */}
@@ -681,7 +980,7 @@ export function ContractDashboard({
                               <div className="flex items-baseline">
                                  <span className="font-bold mr-1 w-5 shrink-0">4.</span>
                                  <span className="font-bold mr-2 w-24 shrink-0">소정근로시간 :</span>
-                                 <span className="flex-1">13시 00분부터 16시 30분까지 (휴게시간 : 없음)</span>
+                                 <span className="flex-1">{previewEmployee.workingHours || '13시 00분부터 16시 30분까지 (휴게시간 : 없음)'}</span>
                               </div>
 
                               {/* 5. 근무일/휴일 */}
@@ -855,6 +1154,8 @@ export function ContractDashboard({
 
                       </div>
                     </div>
+                      )}
+                    </>
                   )}
                </div>
             </DialogContent>
@@ -870,6 +1171,7 @@ export function ContractDashboard({
                 <Checkbox 
                   checked={allSelected || (isIndeterminate ? "indeterminate" : false)}
                   onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  title="모든 근로자 선택/해제"
                 />
               </TableHead>
               <TableHead>성명</TableHead>
@@ -888,10 +1190,10 @@ export function ContractDashboard({
                 return (
                   <TableRow key={employee.id} data-state={selectedIds.has(employee.id) && "selected"}>
                     <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(employee.id)}
-                        onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
-                      />
+                <Checkbox
+                  checked={selectedIds.has(employee.id)}
+                  onCheckedChange={(checked) => handleSelectOne(employee.id, !!checked)}
+                />
                     </TableCell>
                   <TableCell className="font-medium">{employee.name}</TableCell>
                   <TableCell>{employee.phone}</TableCell>
@@ -935,15 +1237,11 @@ export function ContractDashboard({
                           variant="ghost"
                           size="sm"
                           className="h-8 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
-                          onClick={() => {
-                            // Open contract preview for completed contracts
-                            setSelectedIds(new Set([employee.id]));
-                            setIsPreviewOpen(true);
-                            setCurrentPreviewIndex(0);
-                          }}
+                          onClick={() => handleViewCompletedContract(employee.id)}
+                          disabled={loadingContract}
                         >
                           <FileText className="h-3.5 w-3.5 mr-1" />
-                          계약서
+                          {loadingContract ? '로딩...' : '계약서'}
                         </Button>
                       )}
                     </div>
@@ -1172,6 +1470,89 @@ export function ContractDashboard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 카카오톡 메시지 미리보기 다이얼로그 */}
+      <Dialog open={isKakaoPreviewOpen} onOpenChange={setIsKakaoPreviewOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-2xl">📱</span>
+              카카오톡 메시지 미리보기
+            </DialogTitle>
+            <DialogDescription>
+              계약서 발송 시 근로자에게 전송되는 카카오톡 메시지입니다.
+              {kakaoPreviewData?.isMock && (
+                <span className="block mt-2 text-orange-600 font-medium">
+                  ⚠️ 개발 모드: 실제 카카오톡 메시지는 전송되지 않았습니다. (백엔드 로그 확인)
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {kakaoPreviewData && (
+            <div className="space-y-4">
+              {/* 카카오톡 메시지 스타일 미리보기 */}
+              <div className="bg-[#FEE500] rounded-2xl p-4 shadow-lg relative">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-black/10">
+                  <div className="w-6 h-6 bg-black rounded flex items-center justify-center text-white text-xs font-bold">K</div>
+                  <span className="font-semibold text-black">그레이트퍼즐</span>
+                </div>
+                <div className="text-black whitespace-pre-line leading-relaxed mb-3">
+                  {kakaoPreviewData.message}
+                </div>
+                <div className="bg-black text-white rounded-lg p-3 text-center font-semibold cursor-pointer hover:bg-gray-800 transition-colors"
+                     onClick={() => window.open(kakaoPreviewData.contractLink, '_blank')}>
+                  계약서 확인하기
+                </div>
+              </div>
+
+              {/* 수신자 정보 */}
+              <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">수신자:</span>
+                  <span className="font-semibold">{kakaoPreviewData.employeeName}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">전화번호:</span>
+                  <span className="font-semibold">{kakaoPreviewData.employeePhone}</span>
+                </div>
+              </div>
+
+              {/* 링크 정보 */}
+              <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                <div>
+                  <span className="text-xs text-slate-500 block mb-1">계약서 링크:</span>
+                  <a href={kakaoPreviewData.contractLink} target="_blank" rel="noopener noreferrer"
+                     className="text-xs text-blue-600 hover:underline break-all">
+                    {kakaoPreviewData.contractLink}
+                  </a>
+                </div>
+              </div>
+
+              {/* 안내 메시지 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  <strong>💡 참고:</strong> 카카오톡 채널 연결이 완료되면 실제로 메시지가 전송됩니다.
+                  현재는 개발 모드로 로그만 출력됩니다.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsKakaoPreviewOpen(false)}>
+              닫기
+            </Button>
+            <Button onClick={() => {
+              if (kakaoPreviewData) {
+                window.open(kakaoPreviewData.contractLink, '_blank');
+              }
+            }}>
+              계약서 링크 테스트
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -405,7 +405,7 @@ export function EmployeeContractApp({ onClose, employeeName = "홍길동" }: Emp
                                 <div className="flex items-baseline">
                                     <span className="font-bold mr-1 w-5 shrink-0">2.</span>
                                     <span className="font-bold mr-2 w-24 shrink-0">근 무 장 소 :</span>
-                                    <span className="flex-1">본사 사무실</span>
+                                    <span className="flex-1">본사 지정장소</span>
                                 </div>
 
                                 {/* 3. 업무내용 */}

@@ -2,18 +2,39 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 
 // Use window for environment variable in browser, fallback to default
 const getApiBaseUrl = () => {
+  // 1. 명시적으로 window 객체에 설정된 경우 (최우선)
   if (typeof window !== 'undefined' && (window as any).VITE_API_URL) {
+    console.log('[API Client] Using window.VITE_API_URL:', (window as any).VITE_API_URL);
     return (window as any).VITE_API_URL;
   }
+  
+  // 2. Vite 환경 변수로 설정된 경우
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    console.log('[API Client] Using import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
 
-  // Auto-detect network IP for mobile app
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `http://${window.location.hostname}:3000`;
+  // 3. 네트워크 접속 감지 (모바일 기기에서 접속하는 경우)
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    const hostname = window.location.hostname;
+    
+    // 백엔드 서버 IP는 항상 192.168.45.78 (컴퓨터의 실제 IP)
+    // 모바일 앱 서버가 어떤 IP에서 접속되든 백엔드는 고정된 IP 사용
+    const backendIP = '192.168.45.78';
+    
+    // 네트워크 IP 범위 확인 (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    if (hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) {
+      console.log('[API Client] Network access detected, using backend IP:', backendIP);
+      return `http://${backendIP}:3000`;
+    }
+    
+    // 기타 경우 (도메인 등)
+    console.log('[API Client] Using hostname-based URL:', hostname);
+    return `http://${hostname}:3000`;
   }
 
+  // 4. 기본값 (로컬 개발)
+  console.log('[API Client] Using default localhost URL');
   return 'http://localhost:3000';
 };
 
@@ -77,11 +98,20 @@ export interface WorkRecord {
   id: string;
   employeeId: string;
   date: string;
-  startTime: string;
+  startTime?: string | null;
   endTime?: string | null;
   duration?: number | null;
-  status: 'IN_PROGRESS' | 'COMPLETED';
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkSchedule {
+  id: string;
+  employeeId: string;
+  date: string;
+  tasks: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -129,7 +159,7 @@ class ApiClient {
   // ========== Auth ==========
 
   async login(email: string, password: string): Promise<LoginResponse> {
-    console.log('[API Client] Login attempt:', { email });
+    console.log('[API Client] Login attempt:', { email, baseURL: API_BASE_URL });
     try {
       const response = await this.client.post<LoginResponse>('/api/auth/login', {
         email,
@@ -143,8 +173,19 @@ class ApiClient {
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[API Client] Login failed:', error);
+      console.error('[API Client] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method,
+        },
+      });
       throw error;
     }
   }
@@ -236,6 +277,28 @@ class ApiClient {
     await this.client.delete(`/api/employees/${id}`);
   }
 
+  // ========== Notifications ==========
+
+  async previewKakaoMessage(employeeName: string, employeePhone: string, contractId?: string) {
+    const response = await this.client.get('/api/notifications/preview', {
+      params: {
+        employeeName,
+        employeePhone,
+        contractId,
+      },
+    });
+    return response.data;
+  }
+
+  async testKakaoMessage(employeeName: string, employeePhone: string, contractId?: string) {
+    const response = await this.client.post('/api/notifications/test', {
+      employeeName,
+      employeePhone,
+      contractId,
+    });
+    return response.data;
+  }
+
   // ========== Contracts ==========
 
   async sendContract(
@@ -254,12 +317,13 @@ class ApiClient {
   }
 
   async signContract(
-    employeeId: string,
-    signatureBase64: string
+    contractId: string,
+    signatureBase64: string,
+    pdfBase64: string
   ): Promise<{ employee: Employee; contract: any; message: string }> {
     const response = await this.client.post(
-      `/api/employees/${employeeId}/contracts/sign`,
-      { signatureBase64 }
+      `/api/contracts/${contractId}/sign`,
+      { signatureBase64, pdfBase64 }
     );
     return response.data;
   }
@@ -269,11 +333,16 @@ class ApiClient {
     return response.data;
   }
 
+  async getContract(id: string): Promise<any> {
+    const response = await this.client.get(`/api/contracts/${id}`);
+    return response.data;
+  }
+
   // ========== Work Records ==========
 
   async createWorkRecord(
     employeeId: string,
-    data: { startTime: string }
+    data: { startTime: string; notes?: string }
   ): Promise<WorkRecord> {
     const response = await this.client.post<WorkRecord>(
       `/api/employees/${employeeId}/work-records`,
@@ -284,7 +353,7 @@ class ApiClient {
 
   async updateWorkRecord(
     id: string,
-    data: { endTime: string }
+    data: { endTime: string; notes?: string }
   ): Promise<WorkRecord> {
     const response = await this.client.patch<WorkRecord>(
       `/api/work-records/${id}`,
@@ -335,6 +404,54 @@ class ApiClient {
     return response.data;
   }
 
+  // ========== Work Schedules ==========
+
+  async getTodaySchedule(employeeId: string): Promise<WorkSchedule | null> {
+    const response = await this.client.get<WorkSchedule | null>(
+      `/api/work-schedules/${employeeId}/today`
+    );
+    return response.data;
+  }
+
+  async getWeeklySchedule(
+    employeeId: string,
+    startDate?: Date
+  ): Promise<WorkSchedule[]> {
+    const params = new URLSearchParams();
+    if (startDate) {
+      params.append('startDate', startDate.toISOString().split('T')[0]);
+    }
+
+    const response = await this.client.get<WorkSchedule[]>(
+      `/api/work-schedules/${employeeId}/weekly?${params.toString()}`
+    );
+    return response.data;
+  }
+
+  async createWeeklySchedule(
+    employeeId: string,
+    startDate?: Date
+  ): Promise<WorkSchedule[]> {
+    const params = new URLSearchParams();
+    if (startDate) {
+      params.append('startDate', startDate.toISOString().split('T')[0]);
+    }
+
+    const response = await this.client.post<WorkSchedule[]>(
+      `/api/work-schedules/${employeeId}/weekly?${params.toString()}`
+    );
+    return response.data;
+  }
+
+  // ========== Current Work Record ==========
+
+  async getCurrentWorkRecord(employeeId: string): Promise<WorkRecord | null> {
+    const records = await this.getWorkRecordsByEmployee(employeeId);
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = records.find(r => r.date === today);
+    return todayRecord || null;
+  }
+
   // ========== Files ==========
 
   async uploadFile(file: File, type: 'document' | 'signature' | 'pdf' | 'stamp'): Promise<{ url: string }> {
@@ -351,6 +468,38 @@ class ApiClient {
       }
     );
     return response.data;
+  }
+
+  // ========== Push Notifications ==========
+
+  async registerPushToken(
+    employeeId: string,
+    token: string,
+    platform: 'android' | 'ios'
+  ): Promise<void> {
+    await this.client.post(`/api/employees/${employeeId}/push-token`, {
+      token,
+      platform,
+    });
+  }
+
+  async unregisterPushToken(employeeId: string): Promise<void> {
+    await this.client.delete(`/api/employees/${employeeId}/push-token`);
+  }
+
+  // ========== Send Push Notification (Admin only) ==========
+  
+  async sendPushNotification(
+    employeeId: string,
+    title: string,
+    body: string,
+    data?: Record<string, any>
+  ): Promise<void> {
+    await this.client.post(`/api/employees/${employeeId}/push-notification`, {
+      title,
+      body,
+      data,
+    });
   }
 }
 

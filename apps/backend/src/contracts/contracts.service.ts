@@ -67,7 +67,7 @@ export class ContractsService {
       this.configService.get<string>('MOBILE_APP_URL') ||
       'http://localhost:5174';
     const contractLink = `${mobileAppUrl}/contract/${contract.id}`;
-    const appInstallLink = `${mobileAppUrl}/download`; // 앱 다운로드 페이지
+    const appInstallLink = `${mobileAppUrl}/download.html`; // Capacitor 앱 설치 안내 페이지
 
     // 4. 카카오톡 알림 전송
     const notificationResult =
@@ -88,15 +88,11 @@ export class ContractsService {
     };
   }
 
-  async signContract(employeeId: string, signContractDto: SignContractDto) {
-    // 직원의 가장 최근 계약서 조회
-    const contract = await this.prisma.contract.findFirst({
+  async signContract(contractId: string, signContractDto: SignContractDto) {
+    // 특정 계약서 조회 (contractId로 직접 찾기)
+    const contract = await this.prisma.contract.findUnique({
       where: {
-        employeeId,
-        status: ContractStatus.SENT,
-      },
-      orderBy: {
-        createdAt: 'desc',
+        id: contractId,
       },
       include: {
         employee: true,
@@ -105,7 +101,14 @@ export class ContractsService {
 
     if (!contract) {
       throw new NotFoundException(
-        `No pending contract found for employee ${employeeId}`,
+        `Contract with ID ${contractId} not found`,
+      );
+    }
+
+    // 계약서가 SENT 상태가 아닌 경우 오류 발생
+    if (contract.status !== ContractStatus.SENT) {
+      throw new NotFoundException(
+        `Contract ${contractId} is not in SENT status. Current status: ${contract.status}`,
       );
     }
 
@@ -134,7 +137,7 @@ export class ContractsService {
 
     // Employee의 contractStatus도 COMPLETED로 변경
     await this.prisma.employee.update({
-      where: { id: employeeId },
+      where: { id: contract.employeeId },
       data: {
         contractStatus: ContractStatus.COMPLETED,
       },

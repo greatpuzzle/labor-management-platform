@@ -47,12 +47,12 @@ function LogoIcon() {
     <div className="size-[24px] relative">
       <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
         <g>
-          <path d={svgPaths.pbb94e50} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          <path d={svgPaths.p8b62180} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          <path d={svgPaths.p146ca7c0} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          <path d={svgPaths.p21f5800} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          <path d={svgPaths.p273a3400} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          <path d={svgPaths.p2e53d380} stroke="#2E6B4E" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.pbb94e50} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.p8b62180} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.p146ca7c0} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.p21f5800} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.p273a3400} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          <path d={svgPaths.p2e53d380} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
         </g>
       </svg>
     </div>
@@ -128,7 +128,18 @@ function PointIcon() {
     )
 }
 
-// Menu items - 계약관리와 근무현황만 표시
+function DocumentIcon() {
+    return (
+        <svg className="size-[18px]" fill="none" preserveAspectRatio="none" viewBox="0 0 18 18">
+            <path d="M4.5 2.25H9.75V6.75H14.25V15.75H4.5V2.25Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+            <path d="M9.75 2.25V6.75H14.25" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+            <path d="M6.75 10.5H11.25" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+            <path d="M6.75 13.5H11.25" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+        </svg>
+    )
+}
+
+// Menu items - 계약관리, 근무현황, 서류 다운로드
 const items = [
   {
     title: "계약관리",
@@ -142,6 +153,13 @@ const items = [
     url: "#",
     icon: MonitorIcon,
     value: "work-records",
+    hasArrow: true
+  },
+  {
+    title: "서류 다운로드",
+    url: "#",
+    icon: DocumentIcon,
+    value: "documents",
     hasArrow: true
   },
 ]
@@ -176,15 +194,15 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
   }
 
   return (
-    <Sidebar className="bg-[#2E6B4E] border-none text-white fixed left-0 top-0 h-screen z-50" collapsible="none">
+    <Sidebar className="bg-slate-50 border-none text-[#2E6B4E] fixed left-0 top-0 h-screen z-50" collapsible="offcanvas">
        <SidebarHeader className="p-5 pb-8">
         <div className="flex items-center gap-3">
-           <div className="size-[40px] bg-white rounded-[10px] flex items-center justify-center shrink-0">
+           <div className="size-[40px] bg-[#2E6B4E] rounded-[10px] flex items-center justify-center shrink-0">
                <LogoIcon />
            </div>
            <div className="flex flex-col">
-               <span className="text-[13px] font-normal text-white leading-tight">경기도청 관리자 대시보드</span>
-               <span className="text-[10px] text-white/90 font-light mt-0.5 leading-tight">
+               <span className="text-[13px] font-normal text-[#2E6B4E] leading-tight">경기도청 관리자 대시보드</span>
+               <span className="text-[10px] text-[#2E6B4E] font-light mt-0.5 leading-tight">
                    AI 기반 역순환 자판기<br/>모니터링 시스템
                </span>
            </div>
@@ -192,7 +210,7 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
       </SidebarHeader>
       <SidebarContent className="px-3">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11.4px] text-white/80 font-medium px-4 mb-2 tracking-[0.3px]">주요 메뉴</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[11.4px] text-[#2E6B4E] font-medium px-4 mb-2 tracking-[0.3px]">주요 메뉴</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-2">
               {items.map((item) => {
@@ -209,8 +227,8 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                        className={`
                           h-[40px] rounded-[16.4px] px-4 transition-all duration-200
                           ${isActive
-                              ? "bg-[#3D7D5E] text-white hover:bg-[#3D7D5E] hover:text-white font-medium"
-                              : "text-white hover:bg-[#3D7D5E]/50 hover:text-white"
+                              ? "bg-[#2E6B4E] text-white hover:bg-[#2E6B4E] hover:text-white font-medium"
+                              : "text-[#2E6B4E] hover:bg-[#2E6B4E]/10 hover:text-[#2E6B4E]"
                           }
                        `}
                     >
@@ -220,7 +238,7 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                         </div>
                         <span className="text-[15.1px] leading-none">{item.title}</span>
                         {item.hasArrow && (
-                            <ChevronRight className="ml-auto size-4 text-white/70" />
+                            <ChevronRight className={`ml-auto size-4 ${isActive ? "text-white" : "text-[#2E6B4E]"}`} />
                         )}
                       </a>
 
@@ -236,18 +254,18 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
       <SidebarFooter className="p-4 mb-[16px] mt-[300px] mr-[0px] ml-[0px]">
           {/* User Profile Section matching Figma */}
           <div 
-            className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-white/10 transition-colors"
+            className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-[#2E6B4E]/10 transition-colors"
             onClick={() => setIsAdminModalOpen(true)}
           >
              <div className="relative">
-                 <div className="size-[32px] bg-[#BCE1F8] rounded-full border border-white/20 shadow-sm overflow-hidden">
+                 <div className="size-[32px] bg-[#BCE1F8] rounded-full border border-[#2E6B4E]/20 shadow-sm overflow-hidden">
                      {/* Placeholder for user avatar if needed, using simple color for now as per design */}
                  </div>
-                 <div className="absolute bottom-0 right-0 size-[10px] bg-[#00C950] border-2 border-white rounded-full"></div>
+                 <div className="absolute bottom-0 right-0 size-[10px] bg-[#00C950] border-2 border-slate-50 rounded-full"></div>
              </div>
              <div className="flex flex-col">
-                 <span className="text-[13.2px] font-medium text-white">{adminName}</span>
-                 <span className="text-[11.3px] text-white/80 font-light">{user.role === 'super_admin' ? '시스템 관리자' : '기업 관리자'}</span>
+                 <span className="text-[13.2px] font-medium text-[#2E6B4E]">{adminName}</span>
+                 <span className="text-[11.3px] text-[#2E6B4E] font-light">{user.role === 'super_admin' ? '시스템 관리자' : '기업 관리자'}</span>
              </div>
           </div>
       </SidebarFooter>
