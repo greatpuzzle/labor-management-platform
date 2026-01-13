@@ -16,7 +16,7 @@ export class NotificationsController {
     @Query('employeePhone') employeePhone: string = '010-1234-5678',
     @Query('contractId') contractId?: string,
   ) {
-    const mobileAppUrl = process.env.MOBILE_APP_URL || 'http://192.168.45.78:5174';
+    const mobileAppUrl = process.env.MOBILE_APP_URL || 'http://43.200.44.109:3001';
     const contractLink = contractId 
       ? `${mobileAppUrl}/contract/${contractId}`
       : `${mobileAppUrl}/contract/test-contract-id`;
@@ -66,7 +66,7 @@ export class NotificationsController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async testMessage(@Body() body: PreviewMessageDto) {
     const { employeeName, employeePhone, contractId } = body;
-    const mobileAppUrl = process.env.MOBILE_APP_URL || 'http://192.168.45.78:5174';
+    const mobileAppUrl = process.env.MOBILE_APP_URL || 'http://43.200.44.109:3001';
     const contractLink = contractId 
       ? `${mobileAppUrl}/contract/${contractId}`
       : `${mobileAppUrl}/contract/test-contract-id`;

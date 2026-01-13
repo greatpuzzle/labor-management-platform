@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Button } from './ui/button';
-import { Card } from './ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Clock, Play, Square, AlertCircle, Phone } from 'lucide-react';
+import { Clock, Play, Square, AlertCircle, CheckCircle2, Briefcase, Sun } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, WorkRecord, WorkSchedule } from '@shared/api';
 
@@ -14,28 +13,38 @@ interface MainHomeProps {
 
 type WorkState = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 
-export function MainHome({ employeeId, employeeName, companyName }: MainHomeProps) {
+const MainHomeComponent = ({ employeeId, employeeName, companyName }: MainHomeProps) => {
   const [currentWork, setCurrentWork] = useState<WorkRecord | null>(null);
   const [todaySchedule, setTodaySchedule] = useState<WorkSchedule | null>(null);
   const [workState, setWorkState] = useState<WorkState>('NOT_STARTED');
-  const [elapsedTime, setElapsedTime] = useState(0); // 초 단위
+  const [elapsedTime, setElapsedTime] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showEndWorkDialog, setShowEndWorkDialog] = useState(false);
   const [showIssueDialog, setShowIssueDialog] = useState(false);
   const [issueType, setIssueType] = useState<'none' | 'machine' | 'health'>('none');
 
-  // 오늘 근무 기록 및 업무 스케줄 로드
+  // 이전 employeeId를 추적하여 불필요한 재로딩 방지
+  const previousEmployeeIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (!employeeId) {
+      return;
+    }
+
+    // employeeId가 변경되지 않았으면 재로딩하지 않음
+    if (previousEmployeeIdRef.current === employeeId) {
+      return;
+    }
+
+    previousEmployeeIdRef.current = employeeId;
+
     const loadData = async () => {
       try {
-        // 오늘 근무 기록 조회
         const workRecord = await api.getCurrentWorkRecord(employeeId);
         setCurrentWork(workRecord || null);
 
         if (workRecord) {
           setWorkState(workRecord.status as WorkState);
-          
-          // 근무 중이면 타이머 시작
           if (workRecord.status === 'IN_PROGRESS' && workRecord.startTime) {
             const start = new Date(workRecord.startTime);
             const now = new Date();
@@ -46,19 +55,24 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
           setWorkState('NOT_STARTED');
         }
 
-        // 오늘 업무 스케줄 조회
         const schedule = await api.getTodaySchedule(employeeId);
         setTodaySchedule(schedule);
       } catch (error: any) {
         console.error('[MainHome] Failed to load data:', error);
-        toast.error('정보를 불러오는데 실패했습니다.');
+        // 404 에러인 경우 (테스트 employeeId 등): 조용히 처리하고 기본 상태 유지
+        if (error.response?.status === 404) {
+          console.log('[MainHome] Employee not found in DB (test ID?), using default state');
+          setCurrentWork(null);
+          setTodaySchedule(null);
+          setWorkState('NOT_STARTED');
+        }
+        // 다른 에러는 조용히 처리 (이미 기본 상태로 설정됨)
       }
     };
 
     loadData();
   }, [employeeId]);
 
-  // 타이머 업데이트
   useEffect(() => {
     if (workState !== 'IN_PROGRESS' || !currentWork?.startTime) return;
 
@@ -72,7 +86,6 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
     return () => clearInterval(interval);
   }, [workState, currentWork]);
 
-  // 시간 포맷 (HH:MM:SS)
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -80,10 +93,9 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 출근하기
   const handleStartWork = async () => {
     if (!employeeId) {
-      toast.error('근로자 정보가 없어 근무를 시작할 수 없습니다.');
+      toast.error('근로자 정보가 없습니다.');
       return;
     }
 
@@ -98,22 +110,20 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
       setCurrentWork(workRecord);
       setWorkState('IN_PROGRESS');
       setElapsedTime(0);
-      toast.success('근무를 시작했습니다.');
+      toast.success('출근 완료');
     } catch (error: any) {
       console.error('[MainHome] Failed to start work:', error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || '근무 시작에 실패했습니다.';
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || '출근 처리에 실패했습니다.';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // 퇴근하기 클릭
   const handleEndWorkClick = () => {
     setShowEndWorkDialog(true);
   };
 
-  // 특이사항 없음 (업무 완료)
   const handleCompleteWork = async () => {
     if (!currentWork) {
       toast.error('근무 기록이 없습니다.');
@@ -132,7 +142,7 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
       setWorkState('COMPLETED');
       setElapsedTime(0);
       setShowEndWorkDialog(false);
-      toast.success('퇴근 처리되었습니다.');
+      toast.success('퇴근 완료');
     } catch (error: any) {
       console.error('[MainHome] Failed to end work:', error);
       toast.error('퇴근 처리에 실패했습니다.');
@@ -141,132 +151,177 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
     }
   };
 
-  // 특이사항 있음
   const handleIssueClick = () => {
     setShowEndWorkDialog(false);
     setShowIssueDialog(true);
   };
 
-  // 긴급 상황/불편 신고
   const handleEmergencyCall = () => {
-    // 관리자 전화 연결 (tel: 링크)
-    const companyPhone = '032-4567-8901'; // 회사 전화번호 (나중에 동적으로 가져오기)
+    const companyPhone = '032-4567-8901';
     window.location.href = `tel:${companyPhone}`;
   };
 
-  // 현재 수행 중인 업무 (오늘 스케줄의 첫 번째 업무)
-  const currentTask = todaySchedule?.tasks?.[0] || '업무 준비 중';
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return '좋은 아침이에요';
+    if (hour < 18) return '좋은 오후예요';
+    return '좋은 저녁이에요';
+  };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 pb-20">
-      {/* 출근 전 상태 */}
+    <div className="min-h-screen bg-slate-50 pb-24">
+      {/* 출근 전 */}
       {workState === 'NOT_STARTED' && (
-        <div className="flex flex-col items-center justify-center flex-1 p-6">
-          <Card className="w-full max-w-md p-6 mb-6">
-            <div className="text-center mb-4">
-              <h2 className="text-xl font-bold text-slate-900 mb-2">
-                안녕하세요, {employeeName}님
-              </h2>
-              {todaySchedule && todaySchedule.tasks.length > 0 && (
-                <p className="text-slate-600">
-                  오늘 예정된 업무가 <span className="font-bold text-[#00C950]">{todaySchedule.tasks.length}건</span> 있습니다.
-                </p>
-              )}
-              {todaySchedule && todaySchedule.tasks.length > 0 && (
-                <div className="mt-4 text-left">
-                  <p className="text-sm font-semibold text-slate-700 mb-2">오늘의 업무:</p>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-slate-600">
-                    {todaySchedule.tasks.map((task, index) => (
-                      <li key={index}>{task}</li>
-                    ))}
-                  </ul>
-                </div>
+        <div className="flex flex-col">
+          {/* 헤더 */}
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 pt-12 pb-8 rounded-b-3xl">
+            <div className="flex items-center gap-2 text-emerald-100 mb-1">
+              <Sun className="h-4 w-4" />
+              <span className="text-sm">{getGreeting()}</span>
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-1">
+              {employeeName}님
+            </h1>
+            <p className="text-emerald-100 text-sm">{companyName}</p>
+          </div>
+
+          {/* 오늘의 업무 */}
+          <div className="px-5 -mt-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Briefcase className="h-5 w-5 text-slate-600" />
+                <h2 className="font-semibold text-slate-900">오늘의 업무</h2>
+              </div>
+
+              {todaySchedule && todaySchedule.tasks.length > 0 ? (
+                <ul className="space-y-3">
+                  {todaySchedule.tasks.map((task, index) => (
+                    <li key={index} className="flex items-start gap-3">
+                      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                      <span className="text-slate-700 text-sm">{task}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-slate-400 text-sm">오늘 예정된 업무가 없습니다.</p>
               )}
             </div>
-          </Card>
+          </div>
 
-          <Button
-            onClick={handleStartWork}
-            disabled={loading}
-            className="w-full max-w-md h-14 text-lg font-bold bg-[#00C950] hover:bg-[#009e3f] text-white rounded-xl shadow-lg"
-          >
-            <Play className="mr-2 h-5 w-5" />
-            출근하기
-          </Button>
+          {/* 출근 버튼 */}
+          <div className="px-5 mt-6">
+            <Button
+              onClick={handleStartWork}
+              disabled={loading}
+              className="w-full h-16 text-lg font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-500/30"
+            >
+              <Play className="mr-3 h-6 w-6" />
+              출근하기
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* 근무 중 상태 */}
+      {/* 근무 중 */}
       {workState === 'IN_PROGRESS' && (
-        <div className="flex flex-col flex-1 p-6">
-          <Card className="w-full p-6 mb-4">
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-4">
-                <Clock className="h-8 w-8 text-[#00C950] mr-2" />
-                <span className="text-3xl font-bold text-slate-900">
-                  {formatTime(elapsedTime)}
-                </span>
+        <div className="flex flex-col">
+          {/* 헤더 */}
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 pt-12 pb-10 rounded-b-3xl">
+            <p className="text-emerald-100 text-sm mb-2">근무 중</p>
+            <div className="flex items-baseline gap-2">
+              <Clock className="h-8 w-8 text-white" />
+              <span className="text-5xl font-bold text-white tracking-tight">
+                {formatTime(elapsedTime)}
+              </span>
+            </div>
+          </div>
+
+          {/* 상태 카드 */}
+          <div className="px-5 -mt-5">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-semibold text-slate-900">업무 진행 중</span>
               </div>
-              <p className="text-lg font-semibold text-slate-700 mb-2">근무 중</p>
-              <p className="text-sm text-slate-600">
-                현재 <span className="font-bold">{currentTask}</span> 업무 수행 중입니다.
+              <p className="text-sm text-slate-500">
+                오늘도 열심히 일하고 계시네요!
               </p>
             </div>
-          </Card>
+          </div>
 
-          <Button
-            onClick={handleEmergencyCall}
-            variant="outline"
-            className="w-full h-12 text-sm font-medium border-slate-300 text-slate-700"
-          >
-            <AlertCircle className="mr-2 h-4 w-4" />
-            긴급 상황/불편 신고
-          </Button>
+          {/* 긴급 연락 */}
+          <div className="px-5 mt-4">
+            <button
+              onClick={handleEmergencyCall}
+              className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                </div>
+                <span className="font-medium text-slate-700">긴급 상황 신고</span>
+              </div>
+              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* 퇴근 완료 상태 */}
+      {/* 퇴근 완료 */}
       {workState === 'COMPLETED' && (
-        <div className="flex flex-col items-center justify-center flex-1 p-6">
-          <Card className="w-full max-w-md p-6 mb-6">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-slate-900 mb-2">수고하셨습니다!</h2>
+        <div className="flex flex-col">
+          {/* 헤더 */}
+          <div className="bg-gradient-to-br from-slate-700 to-slate-800 px-6 pt-12 pb-10 rounded-b-3xl">
+            <div className="flex items-center gap-2 text-slate-300 mb-2">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="text-sm">퇴근 완료</span>
+            </div>
+            <h1 className="text-2xl font-bold text-white">
+              수고하셨습니다!
+            </h1>
+          </div>
+
+          {/* 근무 요약 */}
+          <div className="px-5 -mt-5">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+              <h2 className="font-semibold text-slate-900 mb-4">오늘의 근무</h2>
+
               {currentWork?.duration && (
-                <p className="text-slate-600 mb-4">
-                  오늘 근무 시간: {Math.floor(currentWork.duration / 60)}시간 {currentWork.duration % 60}분
-                </p>
+                <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                  <span className="text-slate-500">총 근무 시간</span>
+                  <span className="font-semibold text-slate-900">
+                    {Math.floor(currentWork.duration / 60)}시간 {currentWork.duration % 60}분
+                  </span>
+                </div>
               )}
-              <p className="text-sm text-slate-500">
+
+              <p className="text-sm text-slate-400 mt-4">
                 내일도 좋은 하루 되세요!
               </p>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
-      {/* 퇴근하기 다이얼로그 */}
+      {/* 퇴근 다이얼로그 */}
       <AlertDialog open={showEndWorkDialog} onOpenChange={setShowEndWorkDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>퇴근하기</AlertDialogTitle>
             <AlertDialogDescription>
-              오늘의 근무를 종료하시겠습니까? 특이사항이 있으신가요?
+              오늘의 근무를 종료하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleIssueClick}
-              className="bg-yellow-500 hover:bg-yellow-600"
-            >
-              특이사항 있음
-            </AlertDialogAction>
+            <AlertDialogCancel className="rounded-xl">취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCompleteWork}
               disabled={loading}
-              className="bg-[#00C950] hover:bg-[#009e3f]"
+              className="bg-emerald-500 hover:bg-emerald-600 rounded-xl"
             >
-              없음 (업무 완료)
+              퇴근하기
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -274,31 +329,37 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
 
       {/* 특이사항 다이얼로그 */}
       <AlertDialog open={showIssueDialog} onOpenChange={setShowIssueDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>특이사항 확인</AlertDialogTitle>
+            <AlertDialogTitle>특이사항 선택</AlertDialogTitle>
             <AlertDialogDescription>
-              특이사항 사유를 선택해주세요. 관리자에게 알림이 전송됩니다.
+              사유를 선택해주세요.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-4">
-            <Button
-              variant={issueType === 'machine' ? 'default' : 'outline'}
-              className="w-full justify-start"
+            <button
+              className={`w-full p-4 rounded-xl border-2 text-left transition-colors ${
+                issueType === 'machine'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
               onClick={() => setIssueType('machine')}
             >
               기계 고장
-            </Button>
-            <Button
-              variant={issueType === 'health' ? 'default' : 'outline'}
-              className="w-full justify-start"
+            </button>
+            <button
+              className={`w-full p-4 rounded-xl border-2 text-left transition-colors ${
+                issueType === 'health'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
               onClick={() => setIssueType('health')}
             >
-              아픔/건강 문제
-            </Button>
+              건강 문제
+            </button>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl">취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
                 if (issueType === 'none') {
@@ -306,9 +367,8 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
                   return;
                 }
 
-                // 특이사항 처리 (나중에 관리자에게 알림 전송)
-                const issueText = issueType === 'machine' ? '기계 고장' : '아픔/건강 문제';
-                
+                const issueText = issueType === 'machine' ? '기계 고장' : '건강 문제';
+
                 setLoading(true);
                 try {
                   const now = new Date();
@@ -321,7 +381,7 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
                   setWorkState('COMPLETED');
                   setElapsedTime(0);
                   setShowIssueDialog(false);
-                  toast.success('특이사항이 관리자에게 전송되었습니다.');
+                  toast.success('특이사항이 전송되었습니다.');
                 } catch (error: any) {
                   console.error('[MainHome] Failed to end work with issue:', error);
                   toast.error('처리에 실패했습니다.');
@@ -331,7 +391,7 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
                 }
               }}
               disabled={loading || issueType === 'none'}
-              className="bg-[#00C950] hover:bg-[#009e3f]"
+              className="bg-emerald-500 hover:bg-emerald-600 rounded-xl"
             >
               확인
             </AlertDialogAction>
@@ -339,13 +399,13 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 퇴근하기 버튼 (근무 중일 때만 표시, 탭바 위에 고정) */}
+      {/* 퇴근 버튼 (근무 중일 때만) */}
       {workState === 'IN_PROGRESS' && (
-        <div className="fixed bottom-20 left-0 right-0 p-4 bg-white border-t border-slate-200 z-40">
+        <div className="fixed bottom-20 left-0 right-0 px-5 pb-4 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent pt-6 z-40">
           <Button
             onClick={handleEndWorkClick}
             disabled={loading}
-            className="w-full h-14 text-lg font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg"
+            className="w-full h-14 text-base font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg"
           >
             <Square className="mr-2 h-5 w-5" />
             퇴근하기
@@ -354,5 +414,7 @@ export function MainHome({ employeeId, employeeName, companyName }: MainHomeProp
       )}
     </div>
   );
-}
+};
 
+// React.memo로 감싸서 불필요한 리렌더링 방지
+export const MainHome = memo(MainHomeComponent);

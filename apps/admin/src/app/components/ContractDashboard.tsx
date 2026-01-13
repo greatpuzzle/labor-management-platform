@@ -415,8 +415,36 @@ export function ContractDashboard({
 
   const handleCopyInviteLink = () => {
     // 모바일 앱 URL (근로자 정보 입력 페이지)
-    // 기본값은 localhost, 네트워크 접근이 필요한 경우 환경변수로 설정
-    const mobileAppUrl = import.meta.env.VITE_MOBILE_APP_URL || 'http://localhost:5174';
+    // 배포 환경 감지하여 올바른 URL 사용
+    const getMobileAppUrl = () => {
+      // 1. 환경 변수로 명시적으로 설정된 경우 (최우선)
+      if (import.meta.env.VITE_MOBILE_APP_URL) {
+        return import.meta.env.VITE_MOBILE_APP_URL;
+      }
+      
+      // 2. 배포 환경 감지 (hostname 기반)
+      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const hostname = window.location.hostname;
+        
+        // AWS EC2 배포 환경 (43.200.44.109) - 모바일 앱은 포트 3001 사용
+        if (hostname === '43.200.44.109' || hostname.includes('gp-ecospot.com') || hostname.includes('greatpuzzle.org')) {
+          return `http://${hostname}:3001`;
+        }
+        
+        // 네트워크 IP 범위 (로컬 네트워크) - 모바일 앱은 포트 5174 사용
+        if (hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) {
+          return `http://${hostname}:5174`;
+        }
+        
+        // 기타 프로덕션 환경 - 모바일 앱은 포트 3001 사용
+        return `http://${hostname}:3001`;
+      }
+      
+      // 3. 기본값 (로컬 개발)
+      return 'http://localhost:5174';
+    };
+    
+    const mobileAppUrl = getMobileAppUrl();
     // Use dedicated invite page that saves to localStorage and redirects
     const link = `${mobileAppUrl}/invite.html?invite=${activeCompanyId}`;
 
@@ -706,17 +734,6 @@ export function ContractDashboard({
            >
               <LinkIcon className="mr-2 h-4 w-4" />
               초대 링크
-           </Button>
-
-           {/* Excel 다운로드 */}
-           <Button
-             variant="outline"
-             className="bg-white hover:bg-slate-50 text-slate-700 border-slate-300"
-             onClick={handleExportToExcel}
-             disabled={filteredEmployees.length === 0}
-           >
-              <FileDown className="mr-2 h-4 w-4" />
-              Excel 다운로드
            </Button>
 
            {/* 직인 관리 버튼 - ONLY VISIBLE TO SUPER ADMIN in Dashboard */}

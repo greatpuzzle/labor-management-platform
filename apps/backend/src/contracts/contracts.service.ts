@@ -65,7 +65,7 @@ export class ContractsService {
     // 3. 계약서 확인 링크 생성
     const mobileAppUrl =
       this.configService.get<string>('MOBILE_APP_URL') ||
-      'http://localhost:5174';
+      'http://43.200.44.109:3001';
     const contractLink = `${mobileAppUrl}/contract/${contract.id}`;
     const appInstallLink = `${mobileAppUrl}/download.html`; // Capacitor 앱 설치 안내 페이지
 

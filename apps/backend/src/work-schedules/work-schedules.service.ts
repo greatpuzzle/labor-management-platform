@@ -66,9 +66,12 @@ export class WorkSchedulesService {
     endDate.setDate(endDate.getDate() + 6);
 
     for (let i = 0; i < 7; i++) {
+      try {
       const currentDate = new Date(normalizedStartDate);
       currentDate.setDate(currentDate.getDate() + i);
       currentDate.setHours(0, 0, 0, 0); // @db.Date 필드는 날짜만 저장하므로 시간 정보 제거
+        
+        console.log(`[WorkSchedulesService] Processing day ${i + 1}/7, date: ${currentDate.toISOString()}`);
       
       // 해당 날짜에 이미 스케줄이 있는지 확인
       const existingSchedule = await this.prisma.workSchedule.findUnique({
@@ -82,6 +85,7 @@ export class WorkSchedulesService {
 
       if (existingSchedule) {
         // 이미 있으면 업데이트
+          console.log(`[WorkSchedulesService] Updating existing schedule for date ${currentDate.toISOString()}`);
         const updated = await this.prisma.workSchedule.update({
           where: { id: existingSchedule.id },
           data: {
@@ -91,6 +95,7 @@ export class WorkSchedulesService {
         schedules.push(updated);
       } else {
         // 없으면 생성
+          console.log(`[WorkSchedulesService] Creating new schedule for date ${currentDate.toISOString()}`);
         const created = await this.prisma.workSchedule.create({
           data: {
             employeeId,
@@ -99,6 +104,13 @@ export class WorkSchedulesService {
           },
         });
         schedules.push(created);
+        }
+      } catch (dayError: any) {
+        console.error(`[WorkSchedulesService] Error processing day ${i + 1}:`, dayError);
+        console.error(`[WorkSchedulesService] Error stack:`, dayError?.stack);
+        throw new BadRequestException(
+          `Failed to create schedule for day ${i + 1}: ${dayError?.message || dayError}`
+        );
       }
     }
 
@@ -125,7 +137,20 @@ export class WorkSchedulesService {
       console.error('[WorkSchedules] Error in push notification scheduling:', error);
     }
 
+    console.log(`[WorkSchedulesService] Successfully created ${schedules.length} schedules`);
     return schedules;
+    } catch (error: any) {
+      console.error(`[WorkSchedulesService] Error in createWeeklySchedule:`, error);
+      console.error(`[WorkSchedulesService] Error stack:`, error?.stack);
+      console.error(`[WorkSchedulesService] Error message:`, error?.message);
+      // NestJS의 HttpException이면 그대로 throw, 아니면 BadRequestException으로 변환
+      if (error?.status && error?.message) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to create weekly schedule: ${error?.message || error}`
+      );
+    }
   }
 
   /**

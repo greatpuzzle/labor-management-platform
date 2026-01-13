@@ -40,14 +40,23 @@ async function bootstrap() {
   );
 
   // CORS 설정
-  const corsOrigin = process.env.CORS_ORIGIN?.split(',') || [
+  const defaultOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
+    'http://localhost:3000',
+    'http://localhost:3001',
     'http://192.168.45.78:5173',
     'http://192.168.45.78:5174',
     'http://192.168.45.187:5173',
     'http://192.168.45.187:5174',
+    // 배포 환경
+    'http://43.200.44.109:3000',
+    'http://43.200.44.109:3001',
   ];
+  
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? [...defaultOrigins, ...process.env.CORS_ORIGIN.split(',')]
+    : defaultOrigins;
 
   console.log('🔐 CORS allowed origins:', corsOrigin);
 

@@ -1,71 +1,35 @@
-// Service Worker for PWA Installation
-// PWA 설치를 위해 필요한 최소한의 Service Worker
+// Service Worker - 비활성화됨
+// 이 Service Worker는 아무 작업도 하지 않습니다.
+// 기존 캐시를 정리하고 자체적으로 제거됩니다.
 
-const CACHE_NAME = 'labor-management-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-];
-
-// Install Event - 캐시 생성
+// Install Event - 즉시 활성화 (캐시 없음)
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Install event');
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('[Service Worker] Caching files');
-        return cache.addAll(urlsToCache);
-      })
-      .catch((error) => {
-        console.error('[Service Worker] Cache error:', error);
-      })
-  );
-  // 즉시 활성화
+  console.log('[Service Worker] Install - no-op');
   self.skipWaiting();
 });
 
-// Activate Event - 이전 캐시 정리
+// Activate Event - 모든 캐시 삭제 및 제거
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activate event');
+  console.log('[Service Worker] Activate - clearing all caches');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+          console.log('[Service Worker] Deleting cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
+    }).then(() => {
+      // Service Worker 자체 제거
+      return self.registration.unregister();
+    }).then(() => {
+      console.log('[Service Worker] Unregistered successfully');
     })
   );
-  // 즉시 클라이언트 제어 시작
-  return self.clients.claim();
 });
 
-// Fetch Event - 네트워크 우선, 실패 시 캐시 사용
+// Fetch Event - 네트워크 직접 전달 (캐시 사용 안함)
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // 응답이 유효한지 확인
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-
-        // 응답을 클론하여 캐시에 저장
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      })
-      .catch(() => {
-        // 네트워크 실패 시 캐시에서 반환
-        return caches.match(event.request);
-      })
-  );
+  event.respondWith(fetch(event.request));
 });
 

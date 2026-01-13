@@ -42,9 +42,17 @@ export class WorkSchedulesController {
       const result = await this.workSchedulesService.createWeeklySchedule(employeeId, startDate);
       console.log(`[WorkSchedulesController] Weekly schedule created successfully for employee ${employeeId}`);
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[WorkSchedulesController] Error creating weekly schedule for employee ${employeeId}:`, error);
+      console.error(`[WorkSchedulesController] Error stack:`, error?.stack);
+      console.error(`[WorkSchedulesController] Error message:`, error?.message);
+      // NestJS의 HttpException이면 그대로 throw, 아니면 InternalServerErrorException으로 변환
+      if (error?.status && error?.message) {
       throw error;
+      }
+      throw new BadRequestException(
+        error?.message || `Failed to create weekly schedule: ${error}`
+      );
     }
   }
 

@@ -1,28 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { EmployeeRegistration } from "./components/EmployeeRegistration";
 import { EmployeeContractApp } from "./components/EmployeeContractApp";
 import { MainHome } from "./components/MainHome";
 import { Payroll } from "./components/Payroll";
 import { MyPage } from "./components/MyPage";
 import { BottomTabBar } from "./components/BottomTabBar";
+import { PhoneLogin } from "./components/PhoneLogin";
 import { Button } from "./components/ui/button";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from 'sonner';
 import { api } from '@shared/api';
 import { initializePushNotifications } from './services/pushNotifications';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 
 type Tab = 'home' | 'payroll' | 'mypage';
 type AppState = 'splash' | 'registration' | 'contract' | 'contract-install-required' | 'main';
 
 export default function App() {
-  // Splash & Auto Login
-  const [appState, setAppState] = useState<AppState>('splash');
-  const [employeeId, setEmployeeId] = useState<string | null>(null);
-  const [employeeName, setEmployeeName] = useState<string>('');
-  const [companyName, setCompanyName] = useState<string>('');
+  // 초기 상태를 완전히 동기적으로 설정하여 깜빡임 방지
+  const savedEmployeeId = typeof window !== 'undefined' ? localStorage.getItem('employeeId') : null;
+  const savedEmployeeName = typeof window !== 'undefined' ? localStorage.getItem('employeeName') : null;
+  const savedCompanyName = typeof window !== 'undefined' ? localStorage.getItem('companyName') : null;
+  
+  // 초기 상태 결정 (동기적으로)
+  const initialAppState: AppState = (savedEmployeeId && savedEmployeeName) ? 'main' : 'splash';
+  
+  const [appState, setAppState] = useState<AppState>(initialAppState);
+  const [employeeId, setEmployeeId] = useState<string | null>(savedEmployeeId);
+  const [employeeName, setEmployeeName] = useState<string>(savedEmployeeName || '');
+  const [companyName, setCompanyName] = useState<string>(savedCompanyName || '');
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // 초기에는 항상 false
+  
+  // 초기화 완료 여부를 추적하는 ref (무한 루프 방지)
+  const hasInitializedRef = useRef(false);
 
   // 초대/계약서 관련 상태
   const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
@@ -30,163 +42,15 @@ export default function App() {
   const [contract, setContract] = useState<any | null>(null);
   const [contractLoading, setContractLoading] = useState(false);
 
+  // 디버깅 로그 제거 - 불필요한 재렌더링 방지
 
-  // Splash & Auto Login: URL 파라미터 먼저 확인, 그 다음 localStorage 확인
-  useEffect(() => {
-    const checkUserState = async () => {
-      try {
-        console.log('[App] Checking user state...');
-        console.log('[App] Full URL:', window.location.href);
-        console.log('[App] Pathname:', window.location.pathname);
-        console.log('[App] Search:', window.location.search);
-        console.log('[App] Hash:', window.location.hash);
-
-        // 1. 먼저 URL 파라미터 확인 (계약서 링크 또는 초대 링크)
-        // 계약서 링크 확인 (/contract/:contractId)
-        // 단, 이미 로그인되어 있고 계약서가 완료된 상태인 경우는 무시 (서명 완료 후)
-        const pathMatch = window.location.pathname.match(/^\/contract\/(.+)$/);
-        if (pathMatch) {
-          const contractIdFromPath = pathMatch[1];
-          
-          // 이미 로그인된 근로자이고 계약서가 완료된 상태인지 확인
-          const savedEmployeeId = localStorage.getItem('employeeId');
-          if (savedEmployeeId) {
-            try {
-              const employee = await api.getEmployee(savedEmployeeId);
-              if (employee.contractStatus === 'COMPLETED') {
-                // 이미 계약서 서명 완료된 경우, URL만 변경하고 메인 화면으로
-                console.log('[App] Contract already completed, redirecting to home');
-                window.history.replaceState({}, '', '/');
-                setEmployeeId(savedEmployeeId);
-                setEmployeeName(localStorage.getItem('employeeName') || '');
-                setCompanyName(localStorage.getItem('companyName') || '');
-                setAppState('main');
-                return;
-              }
-            } catch (error) {
-              // 에러 발생 시 계속 진행 (계약서 로드 시도)
-              console.error('[App] Failed to check contract status:', error);
-            }
-          }
-          
-          console.log('[App] Contract ID from path:', contractIdFromPath);
-          setContractId(contractIdFromPath);
-          await loadContractAndShow(contractIdFromPath);
-          return;
-        }
-
-        // 초대 링크 확인 (?invite=companyId 또는 #invite=companyId)
-        let invite: string | null = null;
-        
-        // Query parameter 확인
-        const params = new URLSearchParams(window.location.search);
-        invite = params.get('invite');
-        
-        // Hash parameter 확인
-        if (!invite && window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          invite = hashParams.get('invite');
-        }
-        
-        // localStorage에서 pendingInvite 확인 (index.html에서 저장한 경우)
-        if (!invite) {
-          const pendingInvite = localStorage.getItem('pendingInvite');
-          if (pendingInvite) {
-            console.log('[App] Found invite in localStorage:', pendingInvite);
-            invite = pendingInvite;
-            localStorage.removeItem('pendingInvite');
-          }
-        }
-
-        if (invite) {
-          console.log('[App] Invite link detected:', invite);
-          setInviteCompanyId(invite);
-          await loadCompanyAndShow(invite);
-          return;
-        }
-
-        // 2. URL 파라미터가 없으면 localStorage에서 저장된 근로자 정보 확인
-        // 앱 설치 후 계약서 링크로 돌아온 경우 확인
-        const pendingContractId = localStorage.getItem('pendingContractId');
-        if (pendingContractId) {
-          localStorage.removeItem('pendingContractId');
-          console.log('[App] Found pending contract ID, loading:', pendingContractId);
-          await loadContractAndShow(pendingContractId);
-          return;
-        }
-        
-        const savedEmployeeId = localStorage.getItem('employeeId');
-        const savedEmployeeName = localStorage.getItem('employeeName');
-        const savedCompanyName = localStorage.getItem('companyName');
-
-        if (savedEmployeeId && savedEmployeeName) {
-          console.log('[App] Found saved employee info, auto-login:', savedEmployeeId);
-          // 저장된 정보가 있으면 자동 로그인
-          setEmployeeId(savedEmployeeId);
-          setEmployeeName(savedEmployeeName);
-          setCompanyName(savedCompanyName || '');
-          
-          // 계약서 서명 여부 확인
-          try {
-            const employee = await api.getEmployee(savedEmployeeId);
-            // employeeName이 설정되지 않은 경우 API에서 가져온 값으로 설정
-            if (!savedEmployeeName && employee.name) {
-              setEmployeeName(employee.name);
-              localStorage.setItem('employeeName', employee.name);
-            }
-            if (employee.contractStatus === 'COMPLETED') {
-              // 계약서 서명 완료 -> 메인 화면
-              setAppState('main');
-              
-              // Push Notifications 초기화 (계약 완료된 근로자만)
-              try {
-                await initializePushNotifications(savedEmployeeId);
-              } catch (error) {
-                console.error('[App] Failed to initialize push notifications:', error);
-              }
-            } else {
-              // 계약서 서명 미완료 -> 계약서 화면
-              const contracts = await api.getContractsByEmployee(savedEmployeeId);
-              const sentContract = contracts.find((c: any) => c.status === 'SENT');
-              if (sentContract) {
-                setContractId(sentContract.id);
-                setContract(sentContract);
-                setAppState('contract');
-              } else {
-                // 계약서 미발송 -> 메인 화면 (대기)
-                setAppState('main');
-              }
-            }
-          } catch (error: any) {
-            console.error('[App] Failed to check employee state:', error);
-            // 에러 발생 시에도 employeeName이 있으면 메인 화면으로
-            if (savedEmployeeName) {
-              setAppState('main');
-            } else {
-              // employeeName이 없으면 스플래시 화면으로
-              setAppState('splash');
-            }
-          }
-        } else {
-          // 저장된 정보도 없고, URL 파라미터도 없으면 초기 화면
-          console.log('[App] No saved info and no URL params, showing splash');
-          setAppState('splash');
-        }
-      } catch (error: any) {
-        console.error('[App] Failed to check user state:', error);
-        setAppState('splash');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUserState();
-  }, []);
-
-  // 회사 정보 로드 및 등록 화면 표시
-  const loadCompanyAndShow = async (companyId: string) => {
+  // 회사 정보 로드 및 등록 화면 표시 (useEffect 앞에 정의)
+  const loadCompanyAndShow = useCallback(async (companyId: string) => {
     console.log('[App] Loading company:', companyId);
+    // 초기화가 완료된 후에는 loading 상태를 변경하지 않음 (무한 루프 방지)
+    if (!hasInitializedRef.current) {
     setLoading(true);
+    }
     try {
       const company = await api.getCompany(companyId);
       console.log('[App] Company loaded:', company);
@@ -208,21 +72,125 @@ export default function App() {
       toast.error(errorMessage);
       setAppState('splash');
     } finally {
+      if (!hasInitializedRef.current) {
       setLoading(false);
+      }
+    }
+  }, []);
+
+  // 계약서 로드 및 표시 (웹/앱 구분) - useCallback으로 감싸서 안정적인 참조 유지
+  // loadContractInWebView를 내부에 정의하여 순환 참조 방지
+  const loadContractAndShow = useCallback(async (contractId: string) => {
+    // 웹뷰에서 계약서 로드하는 내부 함수 (순환 참조 방지)
+  const loadContractInWebView = async (contractId: string) => {
+    console.log('[App] Loading contract in webview:', contractId);
+    setContractLoading(true);
+    try {
+      const contractData = await api.getContract(contractId);
+      if (contractData && contractData.employee) {
+        setContract(contractData);
+        setEmployeeId(contractData.employee.id);
+        setEmployeeName(contractData.employee.name);
+        setCompanyName(contractData.employee.company?.name || '');
+        
+        // localStorage에 저장 (앱 재시작 시 사용)
+        localStorage.setItem('employeeId', contractData.employee.id);
+        localStorage.setItem('employeeName', contractData.employee.name);
+        localStorage.setItem('companyName', contractData.employee.company?.name || '');
+        
+        // 웹뷰에서도 계약서 서명 화면 표시
+        setAppState('contract');
+      } else {
+        toast.error('계약서 정보를 불러올 수 없습니다.');
+      }
+    } catch (error: any) {
+      console.error('[App] Failed to load contract:', error);
+      toast.error(error.response?.data?.message || '계약서를 불러올 수 없습니다.');
+    } finally {
+      setContractLoading(false);
     }
   };
 
-  // 계약서 로드 및 표시 (웹/앱 구분)
-  const loadContractAndShow = async (contractId: string) => {
     // 웹/앱 구분 먼저 확인
     const isNativeApp = Capacitor.isNativePlatform();
-    console.log('[App] Contract link accessed - Is native app:', isNativeApp);
     
-    if (!isNativeApp) {
-      // 웹에서 접속: 개발 모드에서는 계약서 서명 가능, 프로덕션에서는 스토어로 리다이렉트
+    // Capacitor 객체 존재 여부 확인 (더 강력한 감지)
+    const hasCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+    
+    // PWA standalone 모드 감지 (PWA로 설치된 경우)
+    const isStandalone = 
+      ('standalone' in window.navigator && (window.navigator as any).standalone === true) ||
+      window.matchMedia('(display-mode: standalone)').matches;
+    
+    // 앱이 설치되어 있는지 확인 (Capacitor 네이티브 앱 또는 PWA)
+    const isInstalledApp = isNativeApp || hasCapacitor || isStandalone;
+    
+    console.log('[App] Contract link accessed - Is native app:', isNativeApp);
+    console.log('[App] Has Capacitor object:', hasCapacitor);
+    console.log('[App] Is standalone (PWA):', isStandalone);
+    console.log('[App] Is installed app:', isInstalledApp);
+    console.log('[App] User agent:', navigator.userAgent);
+    
+    if (!isInstalledApp) {
+      // 웹 브라우저에서 접속: 개발 모드 또는 카카오톡 웹뷰에서는 계약서 서명 가능
       const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname.includes('192.168.');
       
-      if (!isDevelopment) {
+      // 카카오톡 웹뷰 감지
+      const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
+      const isInAppBrowser = isKakaoTalk || /Line/i.test(navigator.userAgent) || /NAVER/i.test(navigator.userAgent);
+      
+      console.log('[App] Is KakaoTalk:', isKakaoTalk);
+      console.log('[App] Is in-app browser:', isInAppBrowser);
+      
+      // 카카오톡 웹뷰에서 앱으로 연결 시도
+      if (isKakaoTalk) {
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isAndroid = /android/i.test(navigator.userAgent);
+        
+        // 환경 변수에서 앱스토어 링크 확인
+        const androidStoreUrl = import.meta.env.VITE_ANDROID_PLAY_STORE_URL;
+        const iosStoreUrl = import.meta.env.VITE_IOS_APP_STORE_URL;
+        
+        // 앱 deep link URL 생성 (앱스토어 링크가 없어도 시도)
+        let appDeepLink = null;
+        
+        if (isAndroid) {
+          // Android Intent URL
+          if (androidStoreUrl) {
+            // 앱스토어 링크가 있으면 fallback URL 포함
+            appDeepLink = `intent://contract/${contractId}#Intent;scheme=labor;package=com.ecospott.labor;S.browser_fallback_url=${encodeURIComponent(androidStoreUrl)};end`;
+          } else {
+            // 앱스토어 링크가 없으면 앱만 시도 (실패하면 웹뷰에서 계속)
+            appDeepLink = `intent://contract/${contractId}#Intent;scheme=labor;package=com.ecospott.labor;end`;
+          }
+        } else if (isIOS) {
+          // iOS custom scheme
+          appDeepLink = `labor://contract/${contractId}`;
+        }
+        
+        if (appDeepLink) {
+          console.log('[App] Attempting to open app with deep link:', appDeepLink);
+          
+          // 앱으로 연결 시도
+          // 앱이 설치되어 있으면 앱이 열리고, 없으면 웹뷰에서 계속 진행
+          const tryOpenApp = () => {
+            window.location.href = appDeepLink!;
+            
+            // 일정 시간 후에도 페이지가 그대로 있으면 앱이 설치되지 않은 것으로 간주
+            // 웹뷰에서 계약서 서명 가능하도록 계속 진행
+            setTimeout(async () => {
+              console.log('[App] App not installed or failed to open, continuing in webview');
+              await loadContractInWebView(contractId);
+            }, 1500);
+          };
+          
+          tryOpenApp();
+          return; // 앱 연결 시도 후 리턴
+        }
+      }
+      
+      // 개발 모드이거나 카카오톡/인앱 브라우저에서는 웹에서도 계약서 서명 가능
+      if (!isDevelopment && !isInAppBrowser) {
         // 프로덕션 환경: 스토어로 리다이렉트
         const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
         const isAndroid = /android/i.test(navigator.userAgent);
@@ -331,7 +299,163 @@ export default function App() {
     } finally {
       setContractLoading(false);
     }
-  };
+  }, []); // 빈 의존성 배열: 내부 함수는 클로저로 캡처되므로 안정적
+
+  // Deep Link 처리 (앱이 deep link로 열렸을 때)
+  // loadContractAndShow를 의존성 배열에서 제거하고 함수 내부에서 직접 호출
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      console.log('[App] Setting up deep link listener');
+      
+      // 앱이 deep link로 열렸을 때 처리
+      const listener = App.addListener('appUrlOpen', (event) => {
+        console.log('[App] App opened with URL:', event.url);
+        
+        // labor://contract/contractId 형식 파싱
+        const contractMatch = event.url.match(/labor:\/\/contract\/(.+)/);
+        if (contractMatch) {
+          const contractId = contractMatch[1];
+          console.log('[App] Deep link contract ID:', contractId);
+          // 함수가 정의되어 있는지 확인 후 호출
+          if (typeof loadContractAndShow === 'function') {
+            loadContractAndShow(contractId);
+          }
+          return;
+        }
+        
+        // intent:// 형식 파싱 (Android)
+        const intentMatch = event.url.match(/intent:\/\/contract\/(.+?)#/);
+        if (intentMatch) {
+          const contractId = intentMatch[1];
+          console.log('[App] Intent deep link contract ID:', contractId);
+          // 함수가 정의되어 있는지 확인 후 호출
+          if (typeof loadContractAndShow === 'function') {
+            loadContractAndShow(contractId);
+          }
+          return;
+        }
+      });
+      
+      // 컴포넌트 언마운트 시 리스너 제거
+      return () => {
+        console.log('[App] Removing deep link listener');
+        listener.then(l => l.remove());
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 의존성 배열: 함수는 useCallback으로 안정적 참조 유지
+
+  // Splash & Auto Login: URL 파라미터만 확인 (localStorage는 이미 초기 상태에서 처리됨)
+  useEffect(() => {
+    // 이미 초기화가 완료되었으면 체크하지 않음 (무한 루프 방지)
+    if (hasInitializedRef.current) {
+      return;
+    }
+
+    // 초기화 시작 플래그 설정 (중복 실행 방지)
+    hasInitializedRef.current = true;
+
+    const checkUserState = async () => {
+      try {
+        // URL 파라미터만 확인 (localStorage는 이미 초기 상태에서 처리됨)
+        
+        // 1. 계약서 링크 확인 (/contract/:contractId)
+        const pathMatch = window.location.pathname.match(/^\/contract\/(.+)$/);
+        if (pathMatch) {
+          const contractIdFromPath = pathMatch[1];
+          
+          // 이미 로그인된 근로자이고 계약서가 완료된 상태인지 확인
+          if (employeeId) {
+            try {
+              const employee = await api.getEmployee(employeeId);
+              if (employee.contractStatus === 'COMPLETED') {
+                // 이미 계약서 서명 완료된 경우, URL만 변경하고 메인 화면 유지
+                window.history.replaceState({}, '', '/');
+                return;
+              }
+            } catch (error) {
+              // 에러 발생 시 계속 진행 (계약서 로드 시도)
+            }
+          }
+          
+          // 계약서 로드
+          setContractId(contractIdFromPath);
+          await loadContractAndShow(contractIdFromPath);
+          return;
+        }
+
+        // 2. 초대 링크 확인 (?invite=companyId 또는 #invite=companyId)
+        let invite: string | null = null;
+        const params = new URLSearchParams(window.location.search);
+        invite = params.get('invite');
+        
+        if (!invite && window.location.hash) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          invite = hashParams.get('invite');
+        }
+        
+        if (!invite) {
+          const pendingInvite = localStorage.getItem('pendingInvite');
+          if (pendingInvite) {
+            invite = pendingInvite;
+            localStorage.removeItem('pendingInvite');
+          }
+        }
+
+        if (invite) {
+          setInviteCompanyId(invite);
+          await loadCompanyAndShow(invite);
+          return;
+        }
+
+        // 3. 앱 설치 후 계약서 링크로 돌아온 경우 확인
+        const pendingContractId = localStorage.getItem('pendingContractId');
+        if (pendingContractId) {
+          localStorage.removeItem('pendingContractId');
+          await loadContractAndShow(pendingContractId);
+          return;
+        }
+        
+        // 4. 이미 초기 상태에서 설정된 경우, 계약서 서명 여부만 확인 (비동기로 처리하여 리렌더링 방지)
+        if (employeeId && employeeName && appState === 'main') {
+          // 비동기로 처리하여 즉시 리렌더링 방지
+          Promise.resolve().then(async () => {
+            try {
+              const employee = await api.getEmployee(employeeId);
+              if (employee.contractStatus !== 'COMPLETED') {
+                // 계약서 서명 미완료 -> 계약서 화면으로 변경
+                const contracts = await api.getContractsByEmployee(employeeId);
+                const sentContract = contracts.find((c: any) => c.status === 'SENT');
+                if (sentContract) {
+                  // 상태를 한 번에 배치 업데이트
+                  setContractId(sentContract.id);
+                  setContract(sentContract);
+                  setAppState('contract');
+                }
+              } else {
+                // Push Notifications 초기화 (계약 완료된 근로자만)
+                try {
+                  await initializePushNotifications(employeeId);
+                } catch (error) {
+                  console.error('[App] Failed to initialize push notifications:', error);
+                }
+              }
+            } catch (error: any) {
+              // 404 에러인 경우 (테스트 employeeId 등): 무시
+              if (error.response?.status !== 404) {
+                console.error('[App] Failed to check employee state:', error);
+              }
+            }
+          });
+        }
+      } catch (error: any) {
+        console.error('[App] Failed to check user state:', error);
+      }
+    };
+
+    checkUserState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 의존성 배열: 컴포넌트 마운트 시 한 번만 실행
 
   // 근로자 등록 완료 (웹에서만 실행, 앱으로 이동하지 않음)
   const handleEmployeeRegistered = async (employeeData: any) => {
@@ -408,7 +532,7 @@ export default function App() {
   }, [employeeId, employeeName, companyName]);
 
   // 로그아웃
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('employeeId');
     localStorage.removeItem('employeeName');
     localStorage.removeItem('companyName');
@@ -416,53 +540,29 @@ export default function App() {
     setEmployeeName('');
     setCompanyName('');
     setAppState('splash');
-  };
+    hasInitializedRef.current = false; // 초기화 상태 리셋
+  }, []);
 
-  // 로딩 화면
-  if (loading || contractLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00C950] mx-auto mb-4"></div>
-          <p className="text-slate-600">로딩 중...</p>
-        </div>
-      </div>
-    );
-  }
+  // 핸드폰 인증 로그인 성공 처리 (useCallback으로 안정적인 참조 유지)
+  const handlePhoneLoginSuccess = useCallback((newEmployeeId: string, newEmployeeName: string, newCompanyName: string) => {
+    console.log('[App] Phone login success, setting state:', { newEmployeeId, newEmployeeName, newCompanyName });
 
-  // Splash 화면 (초대 링크나 계약서 링크 없음)
-  if (appState === 'splash' && !inviteCompanyId && !contractId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">장애인 근로관리 시스템</h1>
-          <p className="text-slate-600 mb-6">
-            초대 링크 또는 계약서 링크를 통해 접속해주세요.
-          </p>
-          <Button onClick={() => window.location.href = '/'}>
-            홈으로 이동
-          </Button>
-        </div>
-      </div>
-    );
-  }
+    // 상태 업데이트 전에 초기화 플래그 먼저 설정 (재진입 방지)
+    hasInitializedRef.current = true;
 
-  // 근로자 등록 화면
-  if (appState === 'registration' && inviteCompanyId) {
-    return (
-      <>
-        <EmployeeRegistration
-          companyName={companyName}
-          onSubmit={handleEmployeeRegistered}
-          onHome={() => setAppState('splash')}
-        />
-        <Toaster />
-      </>
-    );
-  }
+    // React 18 automatic batching으로 모든 상태가 한 번에 업데이트됨
+    // 순서: loading 먼저 false → 그 다음 나머지 상태들
+    setLoading(false);
+    setEmployeeId(newEmployeeId);
+    setEmployeeName(newEmployeeName);
+    setCompanyName(newCompanyName);
+    setAppState('main');
+  }, []);
 
-  // 계약서 서명 화면 (앱에서만 표시됨)
-  // contract가 null이 아닐 때만 렌더링 (깜빡임 방지)
+  // 조건부 렌더링을 단순화하여 깜빡임 방지
+  // appState를 기준으로 명확하게 분기 처리
+  
+  // 1. 계약서 서명 화면 (최우선)
   if (appState === 'contract' && contract && employeeId) {
     return (
       <>
@@ -481,7 +581,7 @@ export default function App() {
     );
   }
 
-  // 웹에서 계약서 링크 접속 시 앱 설치 안내 화면
+  // 2. 계약서 설치 필요 화면
   if (appState === 'contract-install-required' && contract) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -509,7 +609,13 @@ export default function App() {
           </div>
           
           <Button
-            onClick={() => setAppState('splash')}
+            onClick={() => {
+              if (employeeId && employeeName) {
+                setAppState('main');
+              } else {
+                setAppState('splash');
+              }
+            }}
             className="w-full"
             variant="outline"
           >
@@ -521,44 +627,60 @@ export default function App() {
     );
   }
 
-  // 메인 화면 (탭바 기반)
-  // appState가 'main'이지만 employeeId나 employeeName이 아직 설정되지 않은 경우 로딩 표시
-  if (appState === 'main') {
-    if (!employeeId || !employeeName) {
-      // 상태가 아직 설정되지 않은 경우 로딩 화면 표시
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+  // 3. 근로자 등록 화면
+  if (appState === 'registration' && inviteCompanyId) {
+    return (
+      <>
+        <EmployeeRegistration
+          companyName={companyName}
+          onSubmit={handleEmployeeRegistered}
+          onHome={() => setAppState('splash')}
+        />
+        <Toaster />
+      </>
+    );
+  }
+
+  // 4. 계약서 로딩 중
+  if (contractLoading) {
+    return (
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00C950] mx-auto mb-4"></div>
-            <p className="text-slate-600">로딩 중...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+            <p className="text-slate-500">계약서 불러오는 중...</p>
           </div>
         </div>
-      );
-    }
-    
+        <Toaster />
+      </>
+    );
+  }
+
+  // 5. 메인 화면 (appState가 'main'이고 필요한 정보가 모두 있을 때)
+  if (appState === 'main' && employeeId && employeeName) {
     return (
       <>
         <div className="min-h-screen bg-slate-50 pb-20">
-          {activeTab === 'home' && (
+          <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
             <MainHome
               employeeId={employeeId}
               employeeName={employeeName}
               companyName={companyName}
             />
-          )}
-          {activeTab === 'payroll' && (
+          </div>
+          <div style={{ display: activeTab === 'payroll' ? 'block' : 'none' }}>
             <Payroll
               employeeId={employeeId}
               employeeName={employeeName}
             />
-          )}
-          {activeTab === 'mypage' && (
+          </div>
+          <div style={{ display: activeTab === 'mypage' ? 'block' : 'none' }}>
             <MyPage
               employeeId={employeeId}
               employeeName={employeeName}
               onLogout={handleLogout}
             />
-          )}
+          </div>
         </div>
         <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} />
         <Toaster />
@@ -566,18 +688,26 @@ export default function App() {
     );
   }
 
-  // 기본 에러 화면
+  // 6. 로딩 화면 (loading이 true일 때만)
+  if (loading) {
+    return (
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+            <p className="text-slate-500">로딩 중...</p>
+          </div>
+        </div>
+        <Toaster />
+      </>
+    );
+  }
+
+  // 7. Splash 화면 (기본값)
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="text-center">
-        <h1 className="text-xl font-bold text-slate-900 mb-2">오류가 발생했습니다</h1>
-        <p className="text-slate-500 mb-4">
-          올바른 링크를 통해 접속해주세요.
-        </p>
-        <Button onClick={() => window.location.href = '/'}>
-          홈으로 이동
-        </Button>
-      </div>
-    </div>
+    <>
+      <PhoneLogin onLoginSuccess={handlePhoneLoginSuccess} />
+      <Toaster />
+    </>
   );
 }

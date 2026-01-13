@@ -20,5 +20,16 @@ export default defineConfig({
     port: 5174,
     host: true, // Allow access from network
   },
+  build: {
+    // 캐시 버스팅을 위한 해시 생성 강화
+    rollupOptions: {
+      output: {
+        // 파일명에 타임스탬프 추가하여 캐시 무효화
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
+      },
+    },
+  },
 })
 

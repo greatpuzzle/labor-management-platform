@@ -1,6 +1,5 @@
 import React from 'react';
 import { Home, Calendar, User } from 'lucide-react';
-import { Button } from './ui/button';
 import { cn } from './ui/utils';
 
 interface BottomTabBarProps {
@@ -16,28 +15,40 @@ export function BottomTabBar({ activeTab, onTabChange }: BottomTabBarProps) {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 safe-area-inset-bottom">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 safe-area-inset-bottom">
+      <div className="h-16 flex items-center justify-around px-2">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
 
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            className={cn(
-              'flex flex-col items-center justify-center flex-1 h-full transition-colors',
-              isActive ? 'text-[#00C950]' : 'text-slate-500'
-            )}
-          >
-            <Icon className={cn('h-6 w-6 mb-1', isActive && 'text-[#00C950]')} />
-            <span className={cn('text-xs font-medium', isActive && 'text-[#00C950] font-semibold')}>
-              {tab.label}
-            </span>
-          </button>
-        );
-      })}
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              className={cn(
+                'flex flex-col items-center justify-center flex-1 h-full py-2 transition-all',
+                isActive ? 'text-emerald-600' : 'text-slate-400'
+              )}
+            >
+              <div className={cn(
+                'p-1.5 rounded-xl transition-all',
+                isActive && 'bg-emerald-50'
+              )}>
+                <Icon className={cn(
+                  'h-5 w-5 transition-all',
+                  isActive && 'text-emerald-600'
+                )} />
+              </div>
+              <span className={cn(
+                'text-[11px] mt-1 font-medium transition-all',
+                isActive && 'text-emerald-600 font-semibold'
+              )}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
-

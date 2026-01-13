@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from './ui/card';
-import { Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { api, WorkRecord } from '@shared/api';
 import { cn } from './ui/utils';
 
@@ -14,7 +13,6 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(false);
 
-  // 해당 월의 근무 기록 로드
   useEffect(() => {
     const loadWorkRecords = async () => {
       if (!employeeId) return;
@@ -27,6 +25,11 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
         setWorkRecords(records);
       } catch (error: any) {
         console.error('[Payroll] Failed to load work records:', error);
+        // 404 에러인 경우 (테스트 employeeId 등): 조용히 처리하고 빈 배열 설정
+        if (error.response?.status === 404) {
+          console.log('[Payroll] Employee not found in DB (test ID?), using empty records');
+          setWorkRecords([]);
+        }
       } finally {
         setLoading(false);
       }
@@ -35,7 +38,6 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
     loadWorkRecords();
   }, [employeeId, currentMonth]);
 
-  // 해당 월의 모든 날짜 생성
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -45,11 +47,9 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
     const startingDayOfWeek = firstDay.getDay();
 
     const days: (number | null)[] = [];
-    // 빈 칸 추가 (첫 주의 시작일 전)
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-    // 날짜 추가
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
@@ -57,17 +57,17 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
     return days;
   };
 
-  // 해당 날짜의 근무 기록 찾기
   const getWorkRecordForDate = (day: number): WorkRecord | undefined => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     return workRecords.find(r => r.date === dateStr);
   };
 
-  // 근무 일수 계산
   const workedDays = workRecords.filter(r => r.status === 'COMPLETED').length;
+  const totalHours = workRecords
+    .filter(r => r.status === 'COMPLETED' && r.duration)
+    .reduce((sum, r) => sum + (r.duration || 0), 0);
 
   const days = getDaysInMonth(currentMonth);
-
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -80,130 +80,136 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 pb-20 p-4">
-      <Card className="w-full p-6 mb-4">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
-          </h2>
-          <div className="flex items-center justify-center gap-4 mt-4">
+    <div className="min-h-screen bg-slate-50 pb-24">
+      {/* 헤더 */}
+      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 pt-12 pb-8 rounded-b-3xl">
+        <div className="flex items-center gap-2 text-emerald-100 mb-1">
+          <Calendar className="h-4 w-4" />
+          <span className="text-sm">근무 기록</span>
+        </div>
+        <h1 className="text-2xl font-bold text-white">
+          {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
+        </h1>
+      </div>
+
+      {/* 통계 카드 */}
+      <div className="px-5 -mt-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
-              <p className="text-sm text-slate-600">근무 일수</p>
-              <p className="text-3xl font-bold text-[#00C950]">{workedDays}일</p>
+              <p className="text-sm text-slate-500 mb-1">근무 일수</p>
+              <p className="text-3xl font-bold text-emerald-500">{workedDays}<span className="text-lg font-medium text-slate-400 ml-1">일</span></p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-slate-500 mb-1">총 근무 시간</p>
+              <p className="text-3xl font-bold text-slate-900">{Math.floor(totalHours / 60)}<span className="text-lg font-medium text-slate-400 ml-1">시간</span></p>
             </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* 캘린더 */}
-      <Card className="w-full p-4">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={handlePrevMonth}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h3 className="text-lg font-semibold text-slate-900">
-            {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
-          </h3>
-          <button
-            onClick={handleNextMonth}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-
-        {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {dayNames.map((day, index) => (
-            <div
-              key={index}
-              className={cn(
-                'text-center text-sm font-semibold py-2',
-                index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-slate-600'
-              )}
+      <div className="px-5 mt-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          {/* 월 네비게이션 */}
+          <div className="flex items-center justify-between mb-5">
+            <button
+              onClick={handlePrevMonth}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
             >
-              {day}
-            </div>
-          ))}
-        </div>
+              <ChevronLeft className="w-5 h-5 text-slate-600" />
+            </button>
+            <h3 className="text-lg font-semibold text-slate-900">
+              {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
+            </h3>
+            <button
+              onClick={handleNextMonth}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-slate-600" />
+            </button>
+          </div>
 
-        {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-1">
-          {days.map((day, index) => {
-            if (day === null) {
-              return <div key={index} className="aspect-square" />;
-            }
-
-            const workRecord = getWorkRecordForDate(day);
-            const isToday =
-              day === new Date().getDate() &&
-              currentMonth.getMonth() === new Date().getMonth() &&
-              currentMonth.getFullYear() === new Date().getFullYear();
-            const isWorked = workRecord?.status === 'COMPLETED';
-            const isInProgress = workRecord?.status === 'IN_PROGRESS';
-            const isNotStarted = workRecord?.status === 'NOT_STARTED';
-
-            return (
+          {/* 요일 헤더 */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {dayNames.map((day, index) => (
               <div
                 key={index}
                 className={cn(
-                  'aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition-colors',
-                  isToday && 'border-[#00C950] bg-green-50',
-                  !isToday && !isWorked && !isInProgress && !isNotStarted && 'border-slate-200 bg-white',
-                  isWorked && 'border-[#00C950] bg-green-100',
-                  isInProgress && 'border-yellow-400 bg-yellow-50',
-                  isNotStarted && 'border-slate-300 bg-slate-100'
+                  'text-center text-xs font-medium py-2',
+                  index === 0 ? 'text-red-400' : index === 6 ? 'text-blue-400' : 'text-slate-400'
                 )}
               >
-                <span
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* 날짜 그리드 */}
+          <div className="grid grid-cols-7 gap-1.5">
+            {days.map((day, index) => {
+              if (day === null) {
+                return <div key={index} className="aspect-square" />;
+              }
+
+              const workRecord = getWorkRecordForDate(day);
+              const isToday =
+                day === new Date().getDate() &&
+                currentMonth.getMonth() === new Date().getMonth() &&
+                currentMonth.getFullYear() === new Date().getFullYear();
+              const isWorked = workRecord?.status === 'COMPLETED';
+              const isInProgress = workRecord?.status === 'IN_PROGRESS';
+
+              return (
+                <div
+                  key={index}
                   className={cn(
-                    'text-sm font-medium',
-                    isToday && 'text-[#00C950] font-bold',
-                    !isToday && isWorked && 'text-slate-900',
-                    !isToday && (isInProgress || isNotStarted) && 'text-slate-600',
-                    !isToday && !isWorked && !isInProgress && !isNotStarted && 'text-slate-400'
+                    'aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative overflow-hidden',
+                    isToday && !isWorked && !isInProgress && 'ring-2 ring-emerald-500 ring-offset-1',
+                    isWorked && 'bg-emerald-500',
+                    isInProgress && 'bg-amber-100',
+                    !isWorked && !isInProgress && 'bg-slate-50'
                   )}
                 >
-                  {day}
-                </span>
-                {isWorked && (
-                  <CheckCircle2 className="h-4 w-4 text-[#00C950] mt-0.5" />
-                )}
-                {isInProgress && (
-                  <div className="h-2 w-2 rounded-full bg-yellow-400 mt-0.5" />
-                )}
-                {isNotStarted && (
-                  <XCircle className="h-4 w-4 text-slate-400 mt-0.5" />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <span
+                    className={cn(
+                      'text-sm font-medium z-10',
+                      isWorked && 'text-white',
+                      isInProgress && 'text-amber-700',
+                      !isWorked && !isInProgress && 'text-slate-600',
+                      isToday && !isWorked && !isInProgress && 'text-emerald-600 font-bold'
+                    )}
+                  >
+                    {day}
+                  </span>
+                  {isWorked && (
+                    <CheckCircle2 className="h-3 w-3 text-white/80 mt-0.5" />
+                  )}
+                  {isInProgress && (
+                    <Clock className="h-3 w-3 text-amber-600 mt-0.5" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-        {/* 범례 */}
-        <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-slate-200">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-[#00C950]" />
-            <span className="text-xs text-slate-600">근무 완료</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded-full bg-yellow-400" />
-            <span className="text-xs text-slate-600">근무 중</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4 text-slate-400" />
-            <span className="text-xs text-slate-600">미완료</span>
+          {/* 범례 */}
+          <div className="flex items-center justify-center gap-6 mt-5 pt-4 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-md bg-emerald-500" />
+              <span className="text-xs text-slate-500">완료</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-md bg-amber-100 border border-amber-200" />
+              <span className="text-xs text-slate-500">진행 중</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-md ring-2 ring-emerald-500" />
+              <span className="text-xs text-slate-500">오늘</span>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
-

@@ -14,6 +14,12 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'automatic'
+  },
+  // Deep Link 설정 (카카오톡에서 앱으로 연결)
+  app: {
+    // Android Intent URL scheme
+    // 예: labor://contract/contractId
+    // 또는 https://gp-ecospot.com/contract/contractId (App Links)
   }
 };
 

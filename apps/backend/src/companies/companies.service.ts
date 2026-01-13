@@ -84,7 +84,7 @@ export class CompaniesService {
 
     // 프론트엔드 URL (환경변수에서 가져오거나 기본값 사용)
     const frontendUrl =
-      process.env.MOBILE_APP_URL || 'http://localhost:5174';
+      process.env.MOBILE_APP_URL || 'http://43.200.44.109:3001';
     const inviteLink = `${frontendUrl}/register?token=${inviteToken}`;
 
     return {

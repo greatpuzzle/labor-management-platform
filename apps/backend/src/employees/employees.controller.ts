@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -117,5 +118,23 @@ export class EmployeesController {
     }
 
     return this.employeesService.remove(id);
+  }
+
+  // 핸드폰 번호로 근로자 로그인 (모바일 앱에서 사용)
+  @Post('employees/login-by-phone')
+  @Public()
+  async loginByPhone(@Body() body: { phone: string }) {
+    const employee = await this.employeesService.findByPhone(body.phone);
+
+    if (!employee) {
+      throw new NotFoundException(
+        '등록된 정보가 없습니다. 회사의 초대 링크를 통해 먼저 등록해주세요.',
+      );
+    }
+
+    return {
+      employee,
+      message: '로그인 성공',
+    };
   }
 }

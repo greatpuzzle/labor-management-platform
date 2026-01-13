@@ -8,10 +8,93 @@
     <title>근로자 계약 관리</title>
     <link rel="manifest" href="/manifest.json" />
     <script>
-      // 백엔드 API URL 명시적으로 설정
-      // 컴퓨터의 실제 IP 주소 (네트워크에서 접근 가능하도록)
-      window.VITE_API_URL = 'http://192.168.45.219:3000';
-      console.log('[HTML] Backend API URL set to:', window.VITE_API_URL);
+      // Service Worker 완전 제거 (캐시 문제 해결) - 즉시 실행
+      (function() {
+        console.log('[HTML] Starting Service Worker cleanup...');
+        
+        if ('serviceWorker' in navigator) {
+          // 즉시 모든 Service Worker 제거
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            console.log('[HTML] Found', registrations.length, 'Service Worker(s)');
+            for(let registration of registrations) {
+              console.log('[HTML] Unregistering Service Worker:', registration.scope);
+              registration.unregister().then(function(success) {
+                if (success) {
+                  console.log('[HTML] Service Worker unregistered successfully');
+                } else {
+                  console.log('[HTML] Service Worker unregistration failed');
+                }
+              });
+            }
+          }).catch(function(error) {
+            console.error('[HTML] Error getting Service Worker registrations:', error);
+          });
+          
+          // 모든 캐시 삭제
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              console.log('[HTML] Found', names.length, 'cache(s)');
+              for (let name of names) {
+                console.log('[HTML] Deleting cache:', name);
+                caches.delete(name).then(function(success) {
+                  if (success) {
+                    console.log('[HTML] Cache deleted:', name);
+                  }
+                });
+              }
+            }).catch(function(error) {
+              console.error('[HTML] Error deleting caches:', error);
+            });
+          }
+          
+          // Service Worker 등록 방지
+          navigator.serviceWorker.register = function() {
+            console.warn('[HTML] Service Worker registration blocked');
+            return Promise.reject(new Error('Service Worker registration blocked'));
+          };
+        }
+      })();
+      
+      // 백엔드 API URL 동적으로 설정 (최우선 실행)
+      // 배포 환경 감지하여 올바른 URL 사용
+      (function() {
+        // 기존 값 강제 삭제
+        if (typeof window !== 'undefined') {
+          try {
+            delete window.VITE_API_URL;
+          } catch (e) {
+            // 무시
+          }
+        }
+        
+        const hostname = window.location.hostname;
+        let apiUrl;
+        
+        // AWS EC2 배포 환경을 최우선으로 체크
+        if (hostname === '43.200.44.109' || hostname.includes('gp-ecospot.com') || hostname.includes('greatpuzzle.org')) {
+          // AWS EC2 배포 환경 - 백엔드는 포트 3002 사용
+          apiUrl = `http://${hostname}:3002`;
+        } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          // 로컬 개발 환경
+          apiUrl = 'http://localhost:3000';
+        } else if (hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) {
+          // 네트워크 IP 범위 (로컬 네트워크) - 백엔드는 포트 3002 사용
+          apiUrl = 'http://192.168.45.78:3002';
+        } else {
+          // 기타 프로덕션 환경 - 백엔드는 포트 3002 사용
+          apiUrl = `http://${hostname}:3002`;
+        }
+        
+        // 강제로 설정 (Object.defineProperty로 덮어쓰기 방지)
+        Object.defineProperty(window, 'VITE_API_URL', {
+          value: apiUrl,
+          writable: false,
+          configurable: false
+        });
+        
+        console.log('[HTML] Backend API URL set to:', window.VITE_API_URL);
+        console.log('[HTML] Hostname:', hostname);
+      })();
       
       // URL 파라미터가 사라지기 전에 보존
       console.log('[HTML] Initial URL:', window.location.href);

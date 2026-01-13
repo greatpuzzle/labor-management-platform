@@ -8,13 +8,7 @@ const getApiBaseUrl = () => {
     return (window as any).VITE_API_URL;
   }
   
-  // 2. Vite 환경 변수로 설정된 경우
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
-    console.log('[API Client] Using import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
-    return import.meta.env.VITE_API_URL;
-  }
-
-  // 3. 네트워크 접속 감지 (모바일 기기에서 접속하는 경우)
+  // 2. 배포 환경 감지 (hostname 기반, 환경 변수보다 우선)
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     const hostname = window.location.hostname;
     
@@ -25,12 +19,24 @@ const getApiBaseUrl = () => {
     // 네트워크 IP 범위 확인 (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
     if (hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) {
       console.log('[API Client] Network access detected, using backend IP:', backendIP);
-      return `http://${backendIP}:3000`;
+      return `http://${backendIP}:3002`;
     }
     
-    // 기타 경우 (도메인 등)
-    console.log('[API Client] Using hostname-based URL:', hostname);
-    return `http://${hostname}:3000`;
+    // AWS EC2 배포 환경 (43.200.44.109) 또는 프로덕션 환경 - 백엔드는 포트 3002 사용
+    if (hostname === '43.200.44.109' || hostname.includes('gp-ecospot.com') || hostname.includes('greatpuzzle.org')) {
+      console.log('[API Client] AWS deployment detected, using port 3002');
+      return `http://${hostname}:3002`;
+    }
+    
+    // 기타 경우 (도메인 등) - 프로덕션 환경은 포트 3002 사용
+    console.log('[API Client] Production environment detected, using port 3002');
+    return `http://${hostname}:3002`;
+  }
+
+  // 3. Vite 환경 변수로 설정된 경우 (로컬 개발 환경에서만 사용)
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    console.log('[API Client] Using import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
+    return import.meta.env.VITE_API_URL;
   }
 
   // 4. 기본값 (로컬 개발)
@@ -275,6 +281,15 @@ class ApiClient {
 
   async deleteEmployee(id: string): Promise<void> {
     await this.client.delete(`/api/employees/${id}`);
+  }
+
+  // 핸드폰 번호로 근로자 로그인
+  async loginByPhone(phone: string): Promise<{ employee: Employee; message: string }> {
+    const response = await this.client.post<{ employee: Employee; message: string }>(
+      '/api/employees/login-by-phone',
+      { phone }
+    );
+    return response.data;
   }
 
   // ========== Notifications ==========
