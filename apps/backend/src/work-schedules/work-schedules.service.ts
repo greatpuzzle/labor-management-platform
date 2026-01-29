@@ -215,6 +215,76 @@ export class WorkSchedulesService {
   }
 
   /**
+   * 회사 전체에 대한 주간 업무 지시 생성
+   */
+  async createWeeklyScheduleForCompany(companyId: string, startDate: Date) {
+    try {
+      // 회사 존재 확인
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+      });
+
+      if (!company) {
+        throw new NotFoundException(`Company with ID ${companyId} not found`);
+      }
+
+      // 계약 완료된 근로자 조회
+      const employees = await this.prisma.employee.findMany({
+        where: {
+          companyId,
+          contractStatus: 'COMPLETED',
+        },
+      });
+
+      if (employees.length === 0) {
+        throw new BadRequestException('계약이 완료된 근로자가 없습니다.');
+      }
+
+      // 모든 근로자에 대해 스케줄 생성
+      const results = [];
+      const errors = [];
+
+      for (const employee of employees) {
+        try {
+          const schedules = await this.createWeeklySchedule(employee.id, startDate);
+          results.push({ employeeId: employee.id, employeeName: employee.name, schedules });
+        } catch (error: any) {
+          errors.push({
+            employeeId: employee.id,
+            employeeName: employee.name,
+            error: error.message,
+          });
+        }
+      }
+
+      // 모든 스케줄 생성이 완료되면 Company의 lastWeeklyScheduleSentAt 업데이트
+      if (results.length > 0) {
+        await this.prisma.company.update({
+          where: { id: companyId },
+          data: {
+            lastWeeklyScheduleSentAt: new Date(),
+          },
+        });
+      }
+
+      return {
+        success: results.length,
+        failed: errors.length,
+        results,
+        errors,
+      };
+    } catch (error: any) {
+      console.error(`[WorkSchedulesService] Error in createWeeklyScheduleForCompany:`, error);
+      if (error?.status && error?.message) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to create weekly schedule for company: ${error?.message || error}`
+      );
+    }
+  }
+
+  /**
    * 업무 스케줄 삭제
    */
   async remove(id: string) {

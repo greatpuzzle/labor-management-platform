@@ -10,9 +10,10 @@ import jsPDF from 'jspdf';
 interface EmployeeContractAppProps {
   onClose: () => void;
   employeeName?: string;
+  additionalTerms?: string;
 }
 
-export function EmployeeContractApp({ onClose, employeeName = "홍길동" }: EmployeeContractAppProps) {
+export function EmployeeContractApp({ onClose, employeeName = "홍길동", additionalTerms = "" }: EmployeeContractAppProps) {
   const [step, setStep] = useState<'summary' | 'full' | 'signing' | 'completed'>('summary');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contractRef = useRef<HTMLDivElement>(null);
@@ -248,8 +249,15 @@ export function EmployeeContractApp({ onClose, employeeName = "홍길동" }: Emp
                     <span className="font-bold mr-2 w-28 shrink-0">성실이행의무 :</span>
                     <span className="leading-tight flex-1">사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</span>
                 </div>
+                {additionalTerms && (
                 <div className="flex items-baseline">
                     <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                    <span className="font-bold mr-2 w-24 shrink-0">추가사항 :</span>
+                    <span className="flex-1 whitespace-pre-line">{additionalTerms}</span>
+                </div>
+                )}
+                <div className="flex items-baseline">
+                    <span className="font-bold mr-1 w-5 shrink-0">{additionalTerms ? '12.' : '11.'}</span>
                     <span className="font-bold mr-2 w-24 shrink-0">기  타 :</span>
                     <span className="flex-1">이 계약에 정함이 없는 사항은 근로기준법령에 의함</span>
                 </div>
@@ -500,9 +508,18 @@ export function EmployeeContractApp({ onClose, employeeName = "홍길동" }: Emp
                                     <span className="leading-tight flex-1">사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</span>
                                 </div>
 
-                                {/* 11. 기타 */}
+                                {/* 추가사항 (10번과 11번 사이) */}
+                                {additionalTerms && (
                                 <div className="flex items-baseline">
                                     <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                                    <span className="font-bold mr-2 w-24 shrink-0">추가사항 :</span>
+                                    <span className="flex-1 whitespace-pre-line">{additionalTerms}</span>
+                                </div>
+                                )}
+
+                                {/* 기타 (추가사항이 있으면 12번, 없으면 11번) */}
+                                <div className="flex items-baseline">
+                                    <span className="font-bold mr-1 w-5 shrink-0">{additionalTerms ? '12.' : '11.'}</span>
                                     <span className="font-bold mr-2 w-24 shrink-0">기  타 :</span>
                                     <span className="flex-1">이 계약에 정함이 없는 사항은 근로기준법령에 의함</span>
                                 </div>

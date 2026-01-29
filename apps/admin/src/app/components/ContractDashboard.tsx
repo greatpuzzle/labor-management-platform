@@ -122,6 +122,7 @@ export function ContractDashboard({
   const [editWorkingHours, setEditWorkingHours] = React.useState("13:00 ~ 16:30")
   const [editSalary, setEditSalary] = React.useState("920,000")
   const [editContractPeriod, setEditContractPeriod] = React.useState("2026.01.02 ~ 2027.01.01")
+  const [editAdditionalTerms, setEditAdditionalTerms] = React.useState("")
 
   // Preview & Sign Modal State
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false)
@@ -263,6 +264,7 @@ export function ContractDashboard({
           workingHours: editWorkingHours,
           salary: editSalary,
           contractPeriod: editContractPeriod,
+          additionalTerms: editAdditionalTerms || undefined,
         })
       );
 
@@ -275,7 +277,8 @@ export function ContractDashboard({
             ...emp,
             workingHours: editWorkingHours,
             salary: editSalary,
-            contractPeriod: editContractPeriod
+            contractPeriod: editContractPeriod,
+            additionalTerms: editAdditionalTerms || undefined
           }
         }
         return emp
@@ -680,7 +683,7 @@ export function ContractDashboard({
                  ) : (
                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100">Admin</Badge>
                  )}
-                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">{user.name}님, 환영합니다!</h2>
+                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">계약관리</h2>
               </div>
               <div className="flex items-center gap-4">
                 <p className="text-slate-500">기업별 근로자 및 계약 관리 대시보드</p>
@@ -811,6 +814,18 @@ export function ContractDashboard({
                     value={editSalary}
                     onChange={(e) => setEditSalary(e.target.value)}
                     className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label htmlFor="additionalTerms" className="text-right pt-2">
+                    추가사항
+                  </Label>
+                  <textarea
+                    id="additionalTerms"
+                    value={editAdditionalTerms}
+                    onChange={(e) => setEditAdditionalTerms(e.target.value)}
+                    placeholder="근로계약서에 추가할 내용을 입력하세요"
+                    className="col-span-3 min-h-[80px] px-3 py-2 text-sm border border-input rounded-md bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
                   />
                 </div>
               </div>
@@ -1078,9 +1093,18 @@ export function ContractDashboard({
                                  <span className="leading-tight flex-1">사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</span>
                               </div>
 
-                              {/* 11. 기타 */}
+                              {/* 추가사항 (10번과 11번 사이) */}
+                              {previewEmployee.additionalTerms && (
+                                <div className="flex items-baseline">
+                                   <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                                   <span className="font-bold mr-2 w-24 shrink-0">추가사항 :</span>
+                                   <span className="flex-1 whitespace-pre-line">{previewEmployee.additionalTerms}</span>
+                                </div>
+                              )}
+
+                              {/* 기타 (추가사항이 있으면 12번, 없으면 11번) */}
                               <div className="flex items-baseline">
-                                 <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                                 <span className="font-bold mr-1 w-5 shrink-0">{previewEmployee.additionalTerms ? '12.' : '11.'}</span>
                                  <span className="font-bold mr-2 w-24 shrink-0">기  타 :</span>
                                  <span className="flex-1">이 계약에 정함이 없는 사항은 근로기준법령에 의함</span>
                               </div>

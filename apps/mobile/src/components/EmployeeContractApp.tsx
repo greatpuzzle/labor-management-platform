@@ -43,6 +43,7 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
   const contractPeriod = contract?.contractPeriod || contract?.employee?.contractPeriod || '2026.01.02 ~ 2027.01.01';
   const contractWorkingHours = contract?.workingHours || contract?.employee?.workingHours || '13시 00분부터 16시 30분까지 (휴게시간 : 없음)';
   const contractSalary = contract?.salary || contract?.employee?.salary || '920,000';
+  const contractAdditionalTerms = contract?.additionalTerms || contract?.employee?.additionalTerms || '';
 
   // Canvas drawing logic
   useEffect(() => {
@@ -769,8 +770,15 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
                     <span className="font-bold mr-2 w-28 shrink-0">성실이행의무 :</span>
                     <span className="leading-tight flex-1">사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</span>
                 </div>
+                {contractAdditionalTerms && (
                 <div className="flex items-baseline">
                     <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                    <span className="font-bold mr-2 w-24 shrink-0">추가사항 :</span>
+                    <span className="flex-1 whitespace-pre-line">{contractAdditionalTerms}</span>
+                </div>
+                )}
+                <div className="flex items-baseline">
+                    <span className="font-bold mr-1 w-5 shrink-0">{contractAdditionalTerms ? '12.' : '11.'}</span>
                     <span className="font-bold mr-2 w-24 shrink-0">기  타 :</span>
                     <span className="flex-1">이 계약에 정함이 없는 사항은 근로기준법령에 의함</span>
                 </div>
@@ -904,7 +912,7 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
                  {/* Scrollable Content - Clean A4 Style */}
                  <ScrollArea className="flex-1">
                      <div className="flex justify-center p-4 pb-32">
-                         <div className="bg-white shadow-lg border border-slate-200 px-[30mm] py-[15mm] text-slate-900 font-serif" style={{ width: '210mm', minHeight: '297mm' }}>
+                         <div className="bg-white shadow-lg border border-slate-200 px-[20mm] py-[15mm] text-slate-900 font-serif" style={{ width: '210mm', minHeight: '297mm' }}>
 
                             {/* Contract Header */}
                             <div className="border-[2px] border-black py-3 px-2 text-center mb-6 shrink-0">
@@ -913,11 +921,11 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
                             
                             {/* Main Content Area */}
                             <div className="flex flex-col justify-start gap-1">
-                                <p className="leading-[2] mb-5 text-[12.5px] text-justify shrink-0" style={{ lineHeight: '2' }}>
+                                <p className="leading-7 mb-5 text-[12.5px] text-justify shrink-0">
                                     <span className="font-bold border-b border-black inline-block min-w-[80px] text-center px-1">{company.name}</span> (이하 "사업주"라 함)과(와) <span className="font-bold border-b border-black inline-block min-w-[60px] text-center px-1">{contractEmployeeName}</span> (이하 "근로자"라 함)은 다음과 같이 근로계약을 체결한다.
                                 </p>
 
-                                <div className="space-y-5 text-[12.5px]" style={{ lineHeight: '1.9' }}>
+                            <div className="space-y-5 text-[12.5px] leading-7">
                                 {/* 1. 계약기간 */}
                                 <div className="flex items-baseline">
                                     <span className="font-bold mr-1 w-5 shrink-0">1.</span>
@@ -1040,9 +1048,18 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
                                     <span className="leading-tight flex-1">사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</span>
                                 </div>
 
-                                {/* 11. 기타 */}
+                                {/* 추가사항 (10번과 11번 사이) */}
+                                {contractAdditionalTerms && (
                                 <div className="flex items-baseline">
                                     <span className="font-bold mr-1 w-5 shrink-0">11.</span>
+                                    <span className="font-bold mr-2 w-24 shrink-0">추가사항 :</span>
+                                    <span className="flex-1 whitespace-pre-line">{contractAdditionalTerms}</span>
+                                </div>
+                                )}
+
+                                {/* 기타 (추가사항이 있으면 12번, 없으면 11번) */}
+                                <div className="flex items-baseline">
+                                    <span className="font-bold mr-1 w-5 shrink-0">{contractAdditionalTerms ? '12.' : '11.'}</span>
                                     <span className="font-bold mr-2 w-24 shrink-0">기  타 :</span>
                                     <span className="flex-1">이 계약에 정함이 없는 사항은 근로기준법령에 의함</span>
                                 </div>

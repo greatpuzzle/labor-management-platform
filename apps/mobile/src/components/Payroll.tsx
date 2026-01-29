@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, CheckCircle2, Clock } from 'lucide-react';
 import { api, WorkRecord } from '@shared/api';
 import { cn } from './ui/utils';
 
@@ -25,9 +25,11 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
         setWorkRecords(records);
       } catch (error: any) {
         console.error('[Payroll] Failed to load work records:', error);
-        // 404 에러인 경우 (테스트 employeeId 등): 조용히 처리하고 빈 배열 설정
-        if (error.response?.status === 404) {
-          console.log('[Payroll] Employee not found in DB (test ID?), using empty records');
+        // 401/403 에러는 인증 문제이므로 조용히 처리 (빈 배열로 설정)
+        if (error.response?.status === 401 || error.response?.status === 403 || error.response?.status === 404) {
+          setWorkRecords([]);
+        } else {
+          // 네트워크 에러 등도 빈 배열로 설정
           setWorkRecords([]);
         }
       } finally {
@@ -63,9 +65,11 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
   };
 
   const workedDays = workRecords.filter(r => r.status === 'COMPLETED').length;
-  const totalHours = workRecords
+  const totalMinutes = workRecords
     .filter(r => r.status === 'COMPLETED' && r.duration)
     .reduce((sum, r) => sum + (r.duration || 0), 0);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
 
   const days = getDaysInMonth(currentMonth);
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -80,29 +84,41 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen bg-[#F8FAFB] pb-24">
       {/* 헤더 */}
-      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 pt-12 pb-8 rounded-b-3xl">
-        <div className="flex items-center gap-2 text-emerald-100 mb-1">
-          <Calendar className="h-4 w-4" />
-          <span className="text-sm">근무 기록</span>
+      <div className="bg-[#2E6B4E] px-6 pt-14 pb-24">
+        <div className="flex items-center gap-2 mb-2">
+          <Calendar className="h-4 w-4 text-white/70" />
+          <span className="text-[13px] text-white/70">근무 기록</span>
         </div>
-        <h1 className="text-2xl font-bold text-white">
+        <h1 className="text-[26px] font-bold text-white tracking-tight">
           {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
         </h1>
       </div>
 
       {/* 통계 카드 */}
-      <div className="px-5 -mt-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center">
-              <p className="text-sm text-slate-500 mb-1">근무 일수</p>
-              <p className="text-3xl font-bold text-emerald-500">{workedDays}<span className="text-lg font-medium text-slate-400 ml-1">일</span></p>
+      <div className="px-5 -mt-12">
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-[13px] text-slate-500 mb-1">근무 일수</p>
+              <div className="flex items-baseline">
+                <span className="text-[32px] font-bold text-[#2E6B4E]">{workedDays}</span>
+                <span className="text-[14px] font-medium text-slate-400 ml-1">일</span>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-sm text-slate-500 mb-1">총 근무 시간</p>
-              <p className="text-3xl font-bold text-slate-900">{Math.floor(totalHours / 60)}<span className="text-lg font-medium text-slate-400 ml-1">시간</span></p>
+            <div>
+              <p className="text-[13px] text-slate-500 mb-1">총 근무 시간</p>
+              <div className="flex items-baseline">
+                <span className="text-[32px] font-bold text-slate-900">{totalHours}</span>
+                <span className="text-[14px] font-medium text-slate-400 ml-1">시간</span>
+                {remainingMinutes > 0 && (
+                  <>
+                    <span className="text-[20px] font-bold text-slate-900 ml-1">{remainingMinutes}</span>
+                    <span className="text-[14px] font-medium text-slate-400 ml-1">분</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -110,33 +126,33 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
 
       {/* 캘린더 */}
       <div className="px-5 mt-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <div className="bg-white rounded-2xl shadow-sm p-5">
           {/* 월 네비게이션 */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-6">
             <button
               onClick={handlePrevMonth}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
             >
               <ChevronLeft className="w-5 h-5 text-slate-600" />
             </button>
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="text-[16px] font-bold text-slate-900">
               {currentMonth.getFullYear()}년 {monthNames[currentMonth.getMonth()]}
             </h3>
             <button
               onClick={handleNextMonth}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors active:scale-95"
             >
               <ChevronRight className="w-5 h-5 text-slate-600" />
             </button>
           </div>
 
           {/* 요일 헤더 */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-1 mb-3">
             {dayNames.map((day, index) => (
               <div
                 key={index}
                 className={cn(
-                  'text-center text-xs font-medium py-2',
+                  'text-center text-[12px] font-semibold py-2',
                   index === 0 ? 'text-red-400' : index === 6 ? 'text-blue-400' : 'text-slate-400'
                 )}
               >
@@ -165,28 +181,32 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
                   key={index}
                   className={cn(
                     'aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative overflow-hidden',
-                    isToday && !isWorked && !isInProgress && 'ring-2 ring-emerald-500 ring-offset-1',
-                    isWorked && 'bg-emerald-500',
-                    isInProgress && 'bg-amber-100',
+                    isToday && !isWorked && !isInProgress && 'ring-2 ring-[#2E6B4E] ring-offset-1',
+                    isWorked && 'bg-yellow-100',
+                    isInProgress && 'bg-[#2E6B4E]',
                     !isWorked && !isInProgress && 'bg-slate-50'
                   )}
                 >
                   <span
                     className={cn(
-                      'text-sm font-medium z-10',
-                      isWorked && 'text-white',
-                      isInProgress && 'text-amber-700',
+                      'text-[13px] font-semibold z-10',
+                      isWorked && 'text-slate-700',
+                      isInProgress && 'text-white',
                       !isWorked && !isInProgress && 'text-slate-600',
-                      isToday && !isWorked && !isInProgress && 'text-emerald-600 font-bold'
+                      isToday && !isWorked && !isInProgress && 'text-[#2E6B4E] font-bold'
                     )}
                   >
                     {day}
                   </span>
                   {isWorked && (
-                    <CheckCircle2 className="h-3 w-3 text-white/80 mt-0.5" />
+                    <img 
+                      src="/stamp.png" 
+                      alt="도장" 
+                      className="absolute inset-0 w-full h-full object-contain opacity-80" 
+                    />
                   )}
                   {isInProgress && (
-                    <Clock className="h-3 w-3 text-amber-600 mt-0.5" />
+                    <Clock className="h-3 w-3 text-white mt-0.5 z-10" />
                   )}
                 </div>
               );
@@ -194,18 +214,20 @@ export function Payroll({ employeeId, employeeName }: PayrollProps) {
           </div>
 
           {/* 범례 */}
-          <div className="flex items-center justify-center gap-6 mt-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-center gap-6 mt-6 pt-5 border-t border-slate-100">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md bg-emerald-500" />
-              <span className="text-xs text-slate-500">완료</span>
+              <div className="w-4 h-4 rounded-md bg-yellow-100 relative overflow-hidden">
+                <img src="/stamp.png" alt="도장" className="absolute inset-0 w-full h-full object-contain opacity-60" />
+              </div>
+              <span className="text-[12px] text-slate-500 font-medium">완료</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md bg-amber-100 border border-amber-200" />
-              <span className="text-xs text-slate-500">진행 중</span>
+              <div className="w-4 h-4 rounded-md bg-[#2E6B4E]" />
+              <span className="text-[12px] text-slate-500 font-medium">진행 중</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md ring-2 ring-emerald-500" />
-              <span className="text-xs text-slate-500">오늘</span>
+              <div className="w-4 h-4 rounded-md ring-2 ring-[#2E6B4E]" />
+              <span className="text-[12px] text-slate-500 font-medium">오늘</span>
             </div>
           </div>
         </div>

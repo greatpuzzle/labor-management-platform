@@ -14,6 +14,29 @@ async function bootstrap() {
   // Express 인스턴스에 접근하여 body size limit 증가
   const expressApp = app.getHttpAdapter().getInstance();
   const express = require('express');
+  const path = require('path');
+  
+  // 정적 파일 서빙 (uploads 폴더)
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  expressApp.use('/uploads', express.static(uploadsDir, {
+    setHeaders: (res, filePath) => {
+      // CORS 헤더 설정
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      
+      // 이미지 파일의 경우 적절한 Content-Type 설정
+      if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.gif')) {
+        res.setHeader('Content-Type', 'image/gif');
+      } else if (filePath.endsWith('.pdf')) {
+        res.setHeader('Content-Type', 'application/pdf');
+      }
+    }
+  }));
   
   // body parser를 직접 설정 (50MB 제한)
   expressApp.use(express.json({ limit: '50mb' }));

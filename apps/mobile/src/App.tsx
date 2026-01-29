@@ -15,23 +15,22 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 
 type Tab = 'home' | 'payroll' | 'mypage';
-type AppState = 'splash' | 'registration' | 'contract' | 'contract-install-required' | 'main';
+type AppState = 'splash' | 'registration' | 'contract' | 'contract-install-required' | 'waiting-for-contract' | 'main';
 
 export default function App() {
-  // 초기 상태를 완전히 동기적으로 설정하여 깜빡임 방지
+  // localStorage에서 저장된 정보 가져오기
   const savedEmployeeId = typeof window !== 'undefined' ? localStorage.getItem('employeeId') : null;
   const savedEmployeeName = typeof window !== 'undefined' ? localStorage.getItem('employeeName') : null;
   const savedCompanyName = typeof window !== 'undefined' ? localStorage.getItem('companyName') : null;
-  
-  // 초기 상태 결정 (동기적으로)
-  const initialAppState: AppState = (savedEmployeeId && savedEmployeeName) ? 'main' : 'splash';
-  
-  const [appState, setAppState] = useState<AppState>(initialAppState);
+
+  // 초기 상태: localStorage에 정보가 있어도 계약서 서명 여부 확인 필요하므로 로딩 상태로 시작
+  // 계약서 서명 완료된 경우에만 main으로 이동
+  const [appState, setAppState] = useState<AppState>(savedEmployeeId ? 'splash' : 'splash');
   const [employeeId, setEmployeeId] = useState<string | null>(savedEmployeeId);
   const [employeeName, setEmployeeName] = useState<string>(savedEmployeeName || '');
   const [companyName, setCompanyName] = useState<string>(savedCompanyName || '');
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [loading, setLoading] = useState(false); // 초기에는 항상 false
+  const [loading, setLoading] = useState(!!savedEmployeeId); // 저장된 정보가 있으면 로딩 상태로 시작
   
   // 초기화 완료 여부를 추적하는 ref (무한 루프 방지)
   const hasInitializedRef = useRef(false);
@@ -89,16 +88,19 @@ export default function App() {
       const contractData = await api.getContract(contractId);
       if (contractData && contractData.employee) {
         setContract(contractData);
-        setEmployeeId(contractData.employee.id);
-        setEmployeeName(contractData.employee.name);
-        setCompanyName(contractData.employee.company?.name || '');
         
-        // localStorage에 저장 (앱 재시작 시 사용)
-        localStorage.setItem('employeeId', contractData.employee.id);
-        localStorage.setItem('employeeName', contractData.employee.name);
-        localStorage.setItem('companyName', contractData.employee.company?.name || '');
+        // 계약서 작성 시 자동 로그인: employee 정보로 바로 로그인 처리
+        const employee = contractData.employee;
+        setEmployeeId(employee.id);
+        setEmployeeName(employee.name);
+        setCompanyName(employee.company?.name || '');
         
-        // 웹뷰에서도 계약서 서명 화면 표시
+        // localStorage에 저장 (계약서 서명 완료 전이지만 계약서 작성 중이므로 임시 저장)
+        localStorage.setItem('employeeId', employee.id);
+        localStorage.setItem('employeeName', employee.name);
+        localStorage.setItem('companyName', employee.company?.name || '');
+        
+        // 계약서 서명 화면 표시
         setAppState('contract');
       } else {
         toast.error('계약서 정보를 불러올 수 없습니다.');
@@ -363,21 +365,7 @@ export default function App() {
         const pathMatch = window.location.pathname.match(/^\/contract\/(.+)$/);
         if (pathMatch) {
           const contractIdFromPath = pathMatch[1];
-          
-          // 이미 로그인된 근로자이고 계약서가 완료된 상태인지 확인
-          if (employeeId) {
-            try {
-              const employee = await api.getEmployee(employeeId);
-              if (employee.contractStatus === 'COMPLETED') {
-                // 이미 계약서 서명 완료된 경우, URL만 변경하고 메인 화면 유지
-                window.history.replaceState({}, '', '/');
-                return;
-              }
-            } catch (error) {
-              // 에러 발생 시 계속 진행 (계약서 로드 시도)
-            }
-          }
-          
+
           // 계약서 로드
           setContractId(contractIdFromPath);
           await loadContractAndShow(contractIdFromPath);
@@ -416,37 +404,63 @@ export default function App() {
           return;
         }
         
-        // 4. 이미 초기 상태에서 설정된 경우, 계약서 서명 여부만 확인 (비동기로 처리하여 리렌더링 방지)
-        if (employeeId && employeeName && appState === 'main') {
-          // 비동기로 처리하여 즉시 리렌더링 방지
-          Promise.resolve().then(async () => {
-            try {
-              const employee = await api.getEmployee(employeeId);
-              if (employee.contractStatus !== 'COMPLETED') {
-                // 계약서 서명 미완료 -> 계약서 화면으로 변경
-                const contracts = await api.getContractsByEmployee(employeeId);
-                const sentContract = contracts.find((c: any) => c.status === 'SENT');
-                if (sentContract) {
-                  // 상태를 한 번에 배치 업데이트
-                  setContractId(sentContract.id);
-                  setContract(sentContract);
-                  setAppState('contract');
-                }
+        // 4. localStorage에 저장된 정보가 있는 경우, 계약서 서명 여부 확인 후 적절한 화면으로 이동
+        if (savedEmployeeId && savedEmployeeName) {
+          try {
+            const employee = await api.getEmployee(savedEmployeeId);
+
+            if (employee.contractStatus === 'COMPLETED') {
+              // 계약서 서명 완료 -> main 화면으로 이동
+              setEmployeeId(savedEmployeeId);
+              setEmployeeName(savedEmployeeName);
+              setCompanyName(savedCompanyName || employee.company?.name || '');
+              setAppState('main');
+              setLoading(false);
+
+              // Push Notifications 초기화 (계약 완료된 근로자만)
+              try {
+                await initializePushNotifications(savedEmployeeId);
+              } catch (error) {
+                console.error('[App] Failed to initialize push notifications:', error);
+              }
+            } else {
+              // 계약서 서명 미완료 -> 계약서 화면 또는 대기 화면으로 이동
+              const contracts = await api.getContractsByEmployee(savedEmployeeId);
+              const sentContract = contracts.find((c: any) => c.status === 'SENT');
+
+              if (sentContract) {
+                // 발송된 계약서가 있음 -> 계약서 서명 화면
+                setEmployeeId(savedEmployeeId);
+                setEmployeeName(savedEmployeeName);
+                setCompanyName(savedCompanyName || employee.company?.name || '');
+                setContractId(sentContract.id);
+                setContract(sentContract);
+                setAppState('contract');
               } else {
-                // Push Notifications 초기화 (계약 완료된 근로자만)
-                try {
-                  await initializePushNotifications(employeeId);
-                } catch (error) {
-                  console.error('[App] Failed to initialize push notifications:', error);
-                }
+                // 발송된 계약서 없음 -> 계약서 발송 대기 화면
+                setEmployeeId(savedEmployeeId);
+                setEmployeeName(savedEmployeeName);
+                setCompanyName(savedCompanyName || employee.company?.name || '');
+                setAppState('waiting-for-contract');
               }
-            } catch (error: any) {
-              // 404 에러인 경우 (테스트 employeeId 등): 무시
-              if (error.response?.status !== 404) {
-                console.error('[App] Failed to check employee state:', error);
-              }
+              setLoading(false);
             }
-          });
+          } catch (error: any) {
+            // 404 에러인 경우 (삭제된 근로자): localStorage 정리 후 splash로 이동
+            if (error.response?.status === 404) {
+              localStorage.removeItem('employeeId');
+              localStorage.removeItem('employeeName');
+              localStorage.removeItem('companyName');
+              setEmployeeId(null);
+              setEmployeeName('');
+              setCompanyName('');
+            }
+            setLoading(false);
+            setAppState('splash');
+          }
+        } else {
+          // localStorage에 정보 없음 -> splash 화면 유지
+          setLoading(false);
         }
       } catch (error: any) {
         console.error('[App] Failed to check user state:', error);
@@ -460,6 +474,34 @@ export default function App() {
   // 근로자 등록 완료 (웹에서만 실행, 앱으로 이동하지 않음)
   const handleEmployeeRegistered = async (employeeData: any) => {
     try {
+      // 복지카드 파일이 있으면 먼저 업로드
+      let documentUrl: string | undefined = undefined;
+      if (employeeData.welfareCardFile) {
+        try {
+          const uploadResult = await api.uploadFile(employeeData.welfareCardFile, 'document');
+          documentUrl = uploadResult.url;
+          console.log('[App] Welfare card uploaded:', documentUrl);
+        } catch (uploadError: any) {
+          console.error('[App] Failed to upload welfare card:', uploadError);
+          toast.error('복지카드 업로드에 실패했습니다. 나중에 관리자에게 문의하세요.');
+          // 업로드 실패해도 등록은 진행
+        }
+      }
+
+      // 중증장애인 확인서 파일이 있으면 업로드
+      let severeCertificateUrl: string | undefined = undefined;
+      if (employeeData.severeCertificateFile) {
+        try {
+          const uploadResult = await api.uploadFile(employeeData.severeCertificateFile, 'document');
+          severeCertificateUrl = uploadResult.url;
+          console.log('[App] Severe certificate uploaded:', severeCertificateUrl);
+        } catch (uploadError: any) {
+          console.error('[App] Failed to upload severe certificate:', uploadError);
+          toast.error('중증장애인 확인서 업로드에 실패했습니다. 나중에 관리자에게 문의하세요.');
+          // 업로드 실패해도 등록은 진행
+        }
+      }
+
       const newEmployee = await api.createEmployee(inviteCompanyId!, {
         name: employeeData.name,
         phone: employeeData.phone,
@@ -469,20 +511,27 @@ export default function App() {
         disabilityRecognitionDate: employeeData.disabilityRecognitionDate,
         emergencyContactName: employeeData.emergencyContactName,
         emergencyContactPhone: employeeData.emergencyContactPhone,
+        documentUrl: documentUrl, // 복지카드 URL 추가
+        severeCertificateUrl: severeCertificateUrl, // 중증장애인 확인서 URL 추가
         sensitiveInfoConsent: employeeData.sensitiveInfoConsent,
       });
       
       console.log('[App] Employee registered successfully:', newEmployee.id);
-      
-      // localStorage에만 저장 (웹에서 등록 정보 저장)
-      // 주의: 웹에서는 앱으로 이동하지 않음, 완료 화면만 표시
+
+      // 등록만 완료된 상태 - 새로고침 시에도 대기 화면을 보여주기 위해
+      // employeeId만 localStorage에 저장 (계약서 서명 완료 전이므로 main 접근 불가)
       localStorage.setItem('employeeId', newEmployee.id);
       localStorage.setItem('employeeName', newEmployee.name);
       localStorage.setItem('companyName', companyName);
-      
-      // EmployeeRegistration 컴포넌트에서 완료 화면(step='complete')을 표시하도록 함
-      // 앱으로 이동하지 않음 - 계약서 발송 대기 중이라는 메시지만 표시
-      
+
+      // URL에서 invite 파라미터 제거 (새로고침 시 registration으로 안 가도록)
+      window.history.replaceState({}, '', '/');
+
+      setEmployeeId(newEmployee.id);
+      setEmployeeName(newEmployee.name);
+      setCompanyName(companyName);
+      setAppState('waiting-for-contract');
+
       toast.success('등록이 완료되었습니다. 계약서 발송을 기다려주세요.');
     } catch (error: any) {
       console.error('[App] Failed to register employee:', error);
@@ -543,20 +592,52 @@ export default function App() {
     hasInitializedRef.current = false; // 초기화 상태 리셋
   }, []);
 
-  // 핸드폰 인증 로그인 성공 처리 (useCallback으로 안정적인 참조 유지)
-  const handlePhoneLoginSuccess = useCallback((newEmployeeId: string, newEmployeeName: string, newCompanyName: string) => {
-    console.log('[App] Phone login success, setting state:', { newEmployeeId, newEmployeeName, newCompanyName });
+  // 카카오 로그인 성공 처리 (useCallback으로 안정적인 참조 유지)
+  const handlePhoneLoginSuccess = useCallback(async (newEmployeeId: string, newEmployeeName: string, newCompanyName: string, contractStatus: string) => {
+    console.log('[App] Kakao login success, setting state:', { newEmployeeId, newEmployeeName, newCompanyName, contractStatus });
 
     // 상태 업데이트 전에 초기화 플래그 먼저 설정 (재진입 방지)
     hasInitializedRef.current = true;
 
-    // React 18 automatic batching으로 모든 상태가 한 번에 업데이트됨
-    // 순서: loading 먼저 false → 그 다음 나머지 상태들
-    setLoading(false);
+    // 공통 상태 업데이트
     setEmployeeId(newEmployeeId);
     setEmployeeName(newEmployeeName);
     setCompanyName(newCompanyName);
-    setAppState('main');
+    setLoading(false);
+
+    if (contractStatus === 'COMPLETED') {
+      // 계약서 서명 완료 -> main 화면으로 이동 & localStorage에 저장
+      localStorage.setItem('employeeId', newEmployeeId);
+      localStorage.setItem('employeeName', newEmployeeName);
+      localStorage.setItem('companyName', newCompanyName);
+      setAppState('main');
+
+      // Push Notifications 초기화 (계약 완료된 근로자만)
+      try {
+        await initializePushNotifications(newEmployeeId);
+      } catch (error) {
+        console.error('[App] Failed to initialize push notifications:', error);
+      }
+    } else {
+      // 계약서 서명 미완료 -> 계약서 화면 또는 대기 화면으로 이동
+      try {
+        const contracts = await api.getContractsByEmployee(newEmployeeId);
+        const sentContract = contracts.find((c: any) => c.status === 'SENT');
+
+        if (sentContract) {
+          // 발송된 계약서가 있음 -> 계약서 서명 화면
+          setContractId(sentContract.id);
+          setContract(sentContract);
+          setAppState('contract');
+        } else {
+          // 발송된 계약서 없음 -> 계약서 발송 대기 화면
+          setAppState('waiting-for-contract');
+        }
+      } catch (error) {
+        console.error('[App] Failed to check contracts:', error);
+        setAppState('waiting-for-contract');
+      }
+    }
   }, []);
 
   // 조건부 렌더링을 단순화하여 깜빡임 방지
@@ -641,7 +722,80 @@ export default function App() {
     );
   }
 
-  // 4. 계약서 로딩 중
+  // 4. 계약서 발송 대기 화면
+  if (appState === 'waiting-for-contract') {
+    return (
+      <div className="min-h-screen bg-white flex flex-col">
+        {/* 상단 영역 */}
+        <div className="pt-20 pb-8 px-6">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="w-11 h-11 bg-[#2E6B4E] rounded-xl flex items-center justify-center">
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-[13px] font-semibold text-[#2E6B4E]">장애인 근로관리</h2>
+              <p className="text-[11px] text-slate-400">{companyName || '회사'}</p>
+            </div>
+          </div>
+
+          <div className="mb-10">
+            <h1 className="text-[28px] font-bold text-slate-900 mb-2 tracking-tight">
+              등록 완료
+            </h1>
+            <p className="text-[15px] text-slate-500 leading-relaxed">
+              {employeeName}님, 등록이 완료되었습니다.
+            </p>
+          </div>
+        </div>
+
+        {/* 콘텐츠 */}
+        <div className="flex-1 px-6">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-[15px] font-semibold text-amber-900 mb-1">
+                  계약서 발송 대기 중
+                </h3>
+                <p className="text-[13px] text-amber-700 leading-relaxed">
+                  관리자가 근로 조건을 설정한 후<br />
+                  카카오톡으로 계약서 링크를 보내드립니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-5 space-y-3">
+            <h3 className="text-[14px] font-semibold text-slate-700">다음 단계 안내</h3>
+            <div className="space-y-2 text-[13px] text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-[11px] font-bold">1</span>
+                <span>관리자가 근로 조건 설정</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 bg-slate-200 text-slate-500 rounded-full flex items-center justify-center text-[11px] font-bold">2</span>
+                <span>카카오톡으로 계약서 링크 발송</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 bg-slate-200 text-slate-500 rounded-full flex items-center justify-center text-[11px] font-bold">3</span>
+                <span>계약서 서명 후 앱 이용 가능</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Toaster />
+      </div>
+    );
+  }
+
+  // 5. 계약서 로딩 중
   if (contractLoading) {
     return (
       <>
@@ -656,7 +810,7 @@ export default function App() {
     );
   }
 
-  // 5. 메인 화면 (appState가 'main'이고 필요한 정보가 모두 있을 때)
+  // 6. 메인 화면 (appState가 'main'이고 필요한 정보가 모두 있을 때)
   if (appState === 'main' && employeeId && employeeName) {
     return (
       <>
@@ -688,7 +842,7 @@ export default function App() {
     );
   }
 
-  // 6. 로딩 화면 (loading이 true일 때만)
+  // 7. 로딩 화면 (loading이 true일 때만)
   if (loading) {
     return (
       <>
@@ -703,7 +857,7 @@ export default function App() {
     );
   }
 
-  // 7. Splash 화면 (기본값)
+  // 7. Splash 화면 (기본값 - 카카오 로그인)
   return (
     <>
       <PhoneLogin onLoginSuccess={handlePhoneLoginSuccess} />

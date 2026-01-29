@@ -2,10 +2,12 @@ import * as React from "react"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
-import { Download, FileSpreadsheet, Building2 } from "lucide-react"
+import { Download, FileSpreadsheet, Building2, FileImage, Loader2 } from "lucide-react"
 import { User, Employee } from "@shared/data"
 import { toast } from "sonner"
 import * as XLSX from 'xlsx'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 import { api } from "@shared/api"
 import {
   Select,
@@ -34,7 +36,7 @@ interface DocumentDownloadDashboardProps {
 }
 
 // API Employee를 내부 Employee 형식으로 변환
-const convertApiEmployee = (apiEmp: any): Employee => {
+const convertApiEmployee = (apiEmp: any): Employee & { severeCertificateUrl?: string | null } => {
   return {
     id: apiEmp.id,
     companyId: apiEmp.companyId,
@@ -52,6 +54,7 @@ const convertApiEmployee = (apiEmp: any): Employee => {
     documentUrl: apiEmp.documentUrl,
     sensitiveInfoConsent: apiEmp.sensitiveInfoConsent,
     contractStatus: apiEmp.contractStatus,
+    severeCertificateUrl: apiEmp.severeCertificateUrl || null,
   };
 };
 
@@ -65,6 +68,8 @@ export function DocumentDownloadDashboard({
   // 서류 다운로드 탭 전용 직원 목록 state
   const [documentsEmployees, setDocumentsEmployees] = React.useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = React.useState(false);
+  const [downloadingWelfareCards, setDownloadingWelfareCards] = React.useState(false);
+  const [downloadingSevereCertificates, setDownloadingSevereCertificates] = React.useState(false);
 
   // Get current company info
   const currentCompany = user.role === 'SUPER_ADMIN'
@@ -105,6 +110,13 @@ export function DocumentDownloadDashboard({
 
   // Filter employees by company (documentsEmployees 사용)
   const filteredEmployees = documentsEmployees.filter(e => e.companyId === selectedCompanyId)
+  
+  // 복지카드 사본이 있는 근로자만 필터링
+  const employeesWithDocuments = filteredEmployees.filter(emp => emp.documentUrl);
+  
+  // 중증장애인확인서가 있는 근로자만 필터링
+  const employeesWithSevereCertificates = filteredEmployees.filter((emp: any) => emp.severeCertificateUrl);
+  
 
   // If no company is selected (especially for super admin), show a message
   if (!currentCompany && user.role === 'SUPER_ADMIN') {
@@ -359,6 +371,561 @@ export function DocumentDownloadDashboard({
     toast.success("Excel 파일이 다운로드되었습니다!");
   }
 
+  // 복지카드 사본 PDF 다운로드
+  const handleDownloadWelfareCards = async () => {
+    if (!currentCompany) {
+      toast.error("회사를 선택해주세요.");
+      return;
+    }
+
+    if (employeesWithDocuments.length === 0) {
+      toast.error("다운로드할 복지카드가 없습니다. 복지카드가 업로드된 근로자가 없습니다.");
+      return;
+    }
+
+    setDownloadingWelfareCards(true);
+
+    try {
+      // PDF 생성 (A4 사이즈)
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+
+      let isFirstPage = true;
+
+      for (const emp of employeesWithDocuments) {
+        if (!emp.documentUrl) continue;
+
+        try {
+          // 새 페이지 추가 (첫 페이지 제외)
+          if (!isFirstPage) {
+            pdf.addPage();
+          }
+          isFirstPage = false;
+
+          // 근로자 정보 헤더 제거 - 복지카드 이미지만 표시
+
+          // 이미지 로드 및 추가
+          const imageUrl = emp.documentUrl;
+
+          // 이미지 가져오기 (CORS 이슈 방지를 위해 fetch 사용)
+          let response: Response;
+          try {
+            response = await fetch(imageUrl, {
+              mode: 'cors',
+              credentials: 'omit',
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+          } catch (fetchError: any) {
+            console.error(`[DocumentDownload] Failed to fetch image for ${emp.name}:`, fetchError);
+            throw new Error(`이미지를 불러올 수 없습니다: ${fetchError.message}`);
+          }
+
+          const blob = await response.blob();
+
+          // 이미지 타입 확인
+          const isPdf = blob.type === 'application/pdf';
+
+          if (isPdf) {
+            // PDF 파일인 경우 - PDF.js를 사용하여 이미지로 변환
+            
+            try {
+              // PDF.js 동적 로드
+              const pdfjsLib = await import('pdfjs-dist');
+              
+              // Worker 설정 - unpkg CDN 사용 (가장 안정적)
+              if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                const version = pdfjsLib.version;
+                // unpkg CDN 사용 (가장 안정적)
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+              } else {
+              }
+              
+              // Blob을 ArrayBuffer로 변환 (PDF.js는 Uint8Array 또는 ArrayBuffer를 직접 받을 수 있음)
+              const arrayBuffer = await blob.arrayBuffer();
+              
+              // ArrayBuffer를 Uint8Array로 변환
+              const uint8Array = new Uint8Array(arrayBuffer);
+              
+              const loadingTask = pdfjsLib.getDocument({ 
+                data: uint8Array, // Uint8Array 사용 (base64 문자열보다 안정적)
+                verbosity: 0, // 로그 레벨
+                useSystemFonts: false, // 시스템 폰트 사용 안 함
+              });
+              
+              const pdfDoc = await loadingTask.promise;
+              
+              // 첫 페이지만 렌더링 (복지카드는 보통 1페이지)
+              const page = await pdfDoc.getPage(1);
+              const scale = 2.0; // 고해상도
+              const viewport = page.getViewport({ scale });
+              
+              
+              // Canvas 생성
+              const pdfCanvas = document.createElement('canvas');
+              const pdfContext = pdfCanvas.getContext('2d');
+              if (!pdfContext) {
+                throw new Error('Canvas context를 가져올 수 없습니다');
+              }
+              
+              pdfCanvas.width = viewport.width;
+              pdfCanvas.height = viewport.height;
+              
+              // PDF 페이지를 Canvas에 렌더링
+              const renderContext = {
+                canvasContext: pdfContext,
+                viewport: viewport,
+              };
+              
+              await page.render(renderContext).promise;
+              
+              // Canvas를 base64로 변환
+              const pdfImageBase64 = pdfCanvas.toDataURL('image/png');
+              
+              // 이미지 크기 계산 (px를 mm로 변환: 1mm = 3.779527559px)
+              const availableWidth = pageWidth - (margin * 2);
+              const availableHeight = pageHeight - (margin * 2);
+              
+              // Canvas 크기를 mm로 변환
+              let imgWidth = pdfCanvas.width / 3.779527559; // px to mm
+              let imgHeight = pdfCanvas.height / 3.779527559;
+              
+              // 비율 유지하면서 크기 조절
+              const widthRatio = availableWidth / imgWidth;
+              const heightRatio = availableHeight / imgHeight;
+              const ratio = Math.min(widthRatio, heightRatio);
+              
+              imgWidth = imgWidth * ratio;
+              imgHeight = imgHeight * ratio;
+              
+              // 이미지 중앙 정렬
+              const imgX = (pageWidth - imgWidth) / 2;
+              const imgY = (pageHeight - imgHeight) / 2;
+              
+              pdf.addImage(pdfImageBase64, 'PNG', imgX, imgY, imgWidth, imgHeight);
+            } catch (pdfError: any) {
+              // 상세한 에러 로깅
+              console.error(`[DocumentDownload] ❌ PDF processing failed for ${emp.name}`);
+              console.error(`[DocumentDownload] Error type:`, typeof pdfError);
+              console.error(`[DocumentDownload] Error constructor:`, pdfError?.constructor?.name);
+              console.error(`[DocumentDownload] Error message:`, pdfError?.message || 'No message');
+              console.error(`[DocumentDownload] Error name:`, pdfError?.name || 'No name');
+              console.error(`[DocumentDownload] Error stack:`, pdfError?.stack || 'No stack');
+              console.error(`[DocumentDownload] Full error object:`, JSON.stringify(pdfError, Object.getOwnPropertyNames(pdfError), 2));
+              
+              // 에러 원인 분석
+              const errorMessage = pdfError?.message || String(pdfError) || '알 수 없는 오류';
+              if (errorMessage.includes('worker') || errorMessage.includes('Worker')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: Worker 파일 로드 실패`);
+                console.error(`[DocumentDownload] Worker URL was: ${pdfjsLib?.GlobalWorkerOptions?.workerSrc || 'Not set'}`);
+              } else if (errorMessage.includes('Invalid PDF') || errorMessage.includes('format')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: PDF 파일 형식 오류`);
+              } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: 네트워크 오류`);
+              } else {
+                console.error(`[DocumentDownload] 🔍 Root cause: 기타 오류 - ${errorMessage}`);
+              }
+              
+              // PDF 처리 실패 시 에러 메시지 표시
+              toast.error(`${emp.name}님의 PDF 파일 처리에 실패했습니다: ${errorMessage}`);
+              throw pdfError; // 에러를 다시 throw하여 루프에서 제외되지 않도록
+            }
+          } else {
+            // 이미지인 경우 - 이미지 추가
+          // Blob을 base64로 변환
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result as string;
+                resolve(result);
+              };
+              reader.onerror = (error) => {
+                console.error(`[DocumentDownload] FileReader error for ${emp.name}:`, error);
+                reject(error);
+              };
+            reader.readAsDataURL(blob);
+          });
+            
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => {
+                resolve();
+              };
+              img.onerror = (error) => {
+                console.error(`[DocumentDownload] Image load error for ${emp.name}:`, error);
+                reject(new Error('이미지를 로드할 수 없습니다'));
+              };
+              img.crossOrigin = 'anonymous'; // CORS 설정
+              img.src = base64;
+            });
+
+            // 이미지 크기 계산 (페이지 전체에 맞게 조절)
+            const availableWidth = pageWidth - (margin * 2);
+            const availableHeight = pageHeight - (margin * 2); // 상하 여백만 고려
+
+            let imgWidth = img.width;
+            let imgHeight = img.height;
+
+            // 비율 유지하면서 크기 조절
+            const widthRatio = availableWidth / imgWidth;
+            const heightRatio = availableHeight / imgHeight;
+            const ratio = Math.min(widthRatio, heightRatio);
+
+            imgWidth = imgWidth * ratio;
+            imgHeight = imgHeight * ratio;
+
+            // 이미지 중앙 정렬
+            const imgX = (pageWidth - imgWidth) / 2;
+            const imgY = (pageHeight - imgHeight) / 2;
+
+            // 이미지 포맷 확인
+            let format = 'JPEG';
+            if (blob.type === 'image/png') format = 'PNG';
+            else if (blob.type === 'image/gif') format = 'GIF';
+            else if (blob.type === 'image/webp') format = 'JPEG'; // WebP는 JPEG로 변환
+
+            
+            try {
+              pdf.addImage(base64, format, imgX, imgY, imgWidth, imgHeight);
+            } catch (addImageError: any) {
+              console.error(`[DocumentDownload] Failed to add image to PDF for ${emp.name}:`, addImageError);
+              throw new Error(`PDF에 이미지를 추가할 수 없습니다: ${addImageError.message}`);
+            }
+          }
+
+        } catch (imgError) {
+          console.error(`이미지 로드 실패 (${emp.name}):`, imgError);
+
+          // 이미지 로드 실패 시 에러 메시지 표시 (한글 지원을 위해 텍스트를 이미지로 변환)
+          if (!isFirstPage) {
+            pdf.addPage();
+          }
+          isFirstPage = false;
+
+          const errorCanvas = document.createElement('canvas');
+          const errorCtx = errorCanvas.getContext('2d');
+          if (errorCtx) {
+            errorCanvas.width = (pageWidth - margin * 2) * 3.779527559;
+            errorCanvas.height = 40 * 3.779527559;
+            
+            errorCtx.fillStyle = '#FFFFFF';
+            errorCtx.fillRect(0, 0, errorCanvas.width, errorCanvas.height);
+            
+            errorCtx.fillStyle = '#000000';
+            errorCtx.font = 'bold 14px Arial, sans-serif';
+            errorCtx.textBaseline = 'top';
+            errorCtx.fillText(emp.name, 0, 0);
+            
+            errorCtx.fillStyle = '#C80000';
+            errorCtx.font = '10px Arial, sans-serif';
+            errorCtx.fillText('복지카드 이미지를 불러올 수 없습니다.', 0, 20);
+            
+            const errorBase64 = errorCanvas.toDataURL('image/png');
+            pdf.addImage(errorBase64, 'PNG', margin, margin, pageWidth - margin * 2, 40);
+          }
+        }
+      }
+
+      // PDF 다운로드
+      const today = new Date().toISOString().split('T')[0];
+      pdf.save(`${currentCompany.name}_복지카드사본_${today}.pdf`);
+
+      toast.success("복지카드 PDF가 다운로드되었습니다!");
+    } catch (error) {
+      console.error('복지카드 PDF 생성 실패:', error);
+      toast.error("PDF 생성에 실패했습니다.");
+    } finally {
+      setDownloadingWelfareCards(false);
+    }
+  }
+
+  // 중증장애인확인서 PDF 다운로드
+  const handleDownloadSevereCertificates = async () => {
+    if (!currentCompany) {
+      toast.error("회사를 선택해주세요.");
+      return;
+    }
+
+    if (employeesWithSevereCertificates.length === 0) {
+      toast.error("다운로드할 중증장애인확인서가 없습니다. 중증장애인확인서가 업로드된 근로자가 없습니다.");
+      return;
+    }
+
+    setDownloadingSevereCertificates(true);
+
+    try {
+      // PDF 생성 (A4 사이즈)
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+
+      let isFirstPage = true;
+
+      for (const emp of employeesWithSevereCertificates) {
+        const empAny = emp as any;
+        if (!empAny.severeCertificateUrl) continue;
+
+        try {
+          // 새 페이지 추가 (첫 페이지 제외)
+          if (!isFirstPage) {
+            pdf.addPage();
+          }
+          isFirstPage = false;
+
+          // 이미지 로드 및 추가
+          const imageUrl = empAny.severeCertificateUrl;
+
+          // 이미지 가져오기 (CORS 이슈 방지를 위해 fetch 사용)
+          let response: Response;
+          try {
+            response = await fetch(imageUrl, {
+              mode: 'cors',
+              credentials: 'omit',
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+          } catch (fetchError: any) {
+            console.error(`[DocumentDownload] Failed to fetch severe certificate for ${emp.name}:`, fetchError);
+            throw new Error(`이미지를 불러올 수 없습니다: ${fetchError.message}`);
+          }
+
+          const blob = await response.blob();
+
+          // 이미지 타입 확인
+          const isPdf = blob.type === 'application/pdf';
+
+          if (isPdf) {
+            // PDF 파일인 경우 - PDF.js를 사용하여 이미지로 변환
+            
+            try {
+              // PDF.js 동적 로드
+              const pdfjsLib = await import('pdfjs-dist');
+              
+              // Worker 설정 - unpkg CDN 사용 (가장 안정적)
+              if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                const version = pdfjsLib.version;
+                // unpkg CDN 사용 (가장 안정적)
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+              } else {
+              }
+              
+              // Blob을 ArrayBuffer로 변환 (PDF.js는 Uint8Array 또는 ArrayBuffer를 직접 받을 수 있음)
+              const arrayBuffer = await blob.arrayBuffer();
+              
+              // ArrayBuffer를 Uint8Array로 변환
+              const uint8Array = new Uint8Array(arrayBuffer);
+              
+              const loadingTask = pdfjsLib.getDocument({ 
+                data: uint8Array, // Uint8Array 사용 (base64 문자열보다 안정적)
+                verbosity: 0, // 로그 레벨
+                useSystemFonts: false, // 시스템 폰트 사용 안 함
+              });
+              
+              const pdfDoc = await loadingTask.promise;
+              
+              // 첫 페이지만 렌더링
+              const page = await pdfDoc.getPage(1);
+              const scale = 2.0; // 고해상도
+              const viewport = page.getViewport({ scale });
+              
+              
+              // Canvas 생성
+              const pdfCanvas = document.createElement('canvas');
+              const pdfContext = pdfCanvas.getContext('2d');
+              if (!pdfContext) {
+                throw new Error('Canvas context를 가져올 수 없습니다');
+              }
+              
+              pdfCanvas.width = viewport.width;
+              pdfCanvas.height = viewport.height;
+              
+              // PDF 페이지를 Canvas에 렌더링
+              const renderContext = {
+                canvasContext: pdfContext,
+                viewport: viewport,
+              };
+              
+              await page.render(renderContext).promise;
+              
+              // Canvas를 base64로 변환
+              const pdfImageBase64 = pdfCanvas.toDataURL('image/png');
+              
+              // 이미지 크기 계산 (px를 mm로 변환: 1mm = 3.779527559px)
+              const availableWidth = pageWidth - (margin * 2);
+              const availableHeight = pageHeight - (margin * 2);
+              
+              // Canvas 크기를 mm로 변환
+              let imgWidth = pdfCanvas.width / 3.779527559; // px to mm
+              let imgHeight = pdfCanvas.height / 3.779527559;
+              
+              // 비율 유지하면서 크기 조절
+              const widthRatio = availableWidth / imgWidth;
+              const heightRatio = availableHeight / imgHeight;
+              const ratio = Math.min(widthRatio, heightRatio);
+              
+              imgWidth = imgWidth * ratio;
+              imgHeight = imgHeight * ratio;
+              
+              // 이미지 중앙 정렬
+              const imgX = (pageWidth - imgWidth) / 2;
+              const imgY = (pageHeight - imgHeight) / 2;
+              
+              pdf.addImage(pdfImageBase64, 'PNG', imgX, imgY, imgWidth, imgHeight);
+            } catch (pdfError: any) {
+              // 상세한 에러 로깅
+              console.error(`[DocumentDownload] ❌ PDF processing failed for ${emp.name}`);
+              console.error(`[DocumentDownload] Error type:`, typeof pdfError);
+              console.error(`[DocumentDownload] Error constructor:`, pdfError?.constructor?.name);
+              console.error(`[DocumentDownload] Error message:`, pdfError?.message || 'No message');
+              console.error(`[DocumentDownload] Error name:`, pdfError?.name || 'No name');
+              console.error(`[DocumentDownload] Error stack:`, pdfError?.stack || 'No stack');
+              console.error(`[DocumentDownload] Full error object:`, JSON.stringify(pdfError, Object.getOwnPropertyNames(pdfError), 2));
+              
+              // 에러 원인 분석
+              const errorMessage = pdfError?.message || String(pdfError) || '알 수 없는 오류';
+              if (errorMessage.includes('worker') || errorMessage.includes('Worker')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: Worker 파일 로드 실패`);
+                console.error(`[DocumentDownload] Worker URL was: ${pdfjsLib?.GlobalWorkerOptions?.workerSrc || 'Not set'}`);
+              } else if (errorMessage.includes('Invalid PDF') || errorMessage.includes('format')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: PDF 파일 형식 오류`);
+              } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+                console.error(`[DocumentDownload] 🔍 Root cause: 네트워크 오류`);
+              } else {
+                console.error(`[DocumentDownload] 🔍 Root cause: 기타 오류 - ${errorMessage}`);
+              }
+              
+              // PDF 처리 실패 시 에러 메시지 표시
+              toast.error(`${emp.name}님의 PDF 파일 처리에 실패했습니다: ${errorMessage}`);
+              throw pdfError; // 에러를 다시 throw하여 루프에서 제외되지 않도록
+            }
+          } else {
+            // 이미지인 경우 - 이미지 추가
+            // Blob을 base64로 변환
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result as string;
+                resolve(result);
+              };
+              reader.onerror = (error) => {
+                console.error(`[DocumentDownload] FileReader error for ${emp.name}:`, error);
+                reject(error);
+              };
+              reader.readAsDataURL(blob);
+            });
+            
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => {
+                resolve();
+              };
+              img.onerror = (error) => {
+                console.error(`[DocumentDownload] Image load error for ${emp.name}:`, error);
+                reject(new Error('이미지를 로드할 수 없습니다'));
+              };
+              img.crossOrigin = 'anonymous'; // CORS 설정
+              img.src = base64;
+            });
+
+            // 이미지 크기 계산 (페이지 전체에 맞게 조절)
+            const availableWidth = pageWidth - (margin * 2);
+            const availableHeight = pageHeight - (margin * 2); // 상하 여백만 고려
+
+            let imgWidth = img.width;
+            let imgHeight = img.height;
+
+            // 비율 유지하면서 크기 조절
+            const widthRatio = availableWidth / imgWidth;
+            const heightRatio = availableHeight / imgHeight;
+            const ratio = Math.min(widthRatio, heightRatio);
+
+            imgWidth = imgWidth * ratio;
+            imgHeight = imgHeight * ratio;
+
+            // 이미지 중앙 정렬
+            const imgX = (pageWidth - imgWidth) / 2;
+            const imgY = (pageHeight - imgHeight) / 2;
+
+            // 이미지 포맷 확인
+            let format = 'JPEG';
+            if (blob.type === 'image/png') format = 'PNG';
+            else if (blob.type === 'image/gif') format = 'GIF';
+            else if (blob.type === 'image/webp') format = 'JPEG'; // WebP는 JPEG로 변환
+
+            
+            try {
+            pdf.addImage(base64, format, imgX, imgY, imgWidth, imgHeight);
+            } catch (addImageError: any) {
+              console.error(`[DocumentDownload] Failed to add image to PDF for ${emp.name}:`, addImageError);
+              throw new Error(`PDF에 이미지를 추가할 수 없습니다: ${addImageError.message}`);
+            }
+          }
+
+        } catch (imgError) {
+          console.error(`이미지 로드 실패 (${emp.name}):`, imgError);
+
+          // 이미지 로드 실패 시 에러 메시지 표시 (한글 지원을 위해 텍스트를 이미지로 변환)
+          if (!isFirstPage) {
+            pdf.addPage();
+          }
+          isFirstPage = false;
+
+          const errorCanvas = document.createElement('canvas');
+          const errorCtx = errorCanvas.getContext('2d');
+          if (errorCtx) {
+            errorCanvas.width = (pageWidth - margin * 2) * 3.779527559;
+            errorCanvas.height = 40 * 3.779527559;
+            
+            errorCtx.fillStyle = '#FFFFFF';
+            errorCtx.fillRect(0, 0, errorCanvas.width, errorCanvas.height);
+            
+            errorCtx.fillStyle = '#000000';
+            errorCtx.font = 'bold 14px Arial, sans-serif';
+            errorCtx.textBaseline = 'top';
+            errorCtx.fillText(emp.name, 0, 0);
+            
+            errorCtx.fillStyle = '#C80000';
+            errorCtx.font = '10px Arial, sans-serif';
+            errorCtx.fillText('중증장애인확인서 이미지를 불러올 수 없습니다.', 0, 20);
+            
+            const errorBase64 = errorCanvas.toDataURL('image/png');
+            pdf.addImage(errorBase64, 'PNG', margin, margin, pageWidth - margin * 2, 40);
+          }
+        }
+      }
+
+      // PDF 다운로드
+      const today = new Date().toISOString().split('T')[0];
+      pdf.save(`${currentCompany.name}_중증장애인확인서_${today}.pdf`);
+
+      toast.success("중증장애인확인서 PDF가 다운로드되었습니다!");
+    } catch (error) {
+      console.error('중증장애인확인서 PDF 생성 실패:', error);
+      toast.error("PDF 생성에 실패했습니다.");
+    } finally {
+      setDownloadingSevereCertificates(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Section: Header & Company Selector */}
@@ -399,7 +966,7 @@ export function DocumentDownloadDashboard({
       </div>
 
       {/* 다운로드 카드들 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* 근로자 명단 다운로드 */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
@@ -446,27 +1013,129 @@ export function DocumentDownloadDashboard({
           </CardContent>
         </Card>
 
-        {/* 향후 추가 가능한 다른 다운로드 카드들 */}
-        <Card className="opacity-60">
+        {/* 복지카드 사본 다운로드 */}
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-slate-100 rounded-lg">
-                  <FileSpreadsheet className="h-6 w-6 text-slate-400" />
+                <div className="p-3 bg-emerald-50 rounded-lg">
+                  <FileImage className="h-6 w-6 text-emerald-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg text-slate-400">추가 서류</CardTitle>
+                  <CardTitle className="text-lg">복지카드 사본</CardTitle>
                   <CardDescription className="mt-1">
-                    향후 추가 예정
+                    PDF 형식으로 다운로드
                   </CardDescription>
                 </div>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-400">
-              추가 서류 다운로드 기능은 향후 제공될 예정입니다.
-            </p>
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                <p className="mb-2">다음 정보가 포함됩니다:</p>
+                <ul className="list-disc list-inside space-y-1 text-slate-500">
+                  <li>근로자별 복지카드 사본 이미지</li>
+                  <li>각 페이지에 근로자 정보 표시</li>
+                  <li>성명, 전화번호, 장애유형</li>
+                </ul>
+                {employeesWithDocuments.length === 0 && filteredEmployees.length > 0 && (
+                  <p className="mt-3 text-xs text-amber-600 font-medium">
+                    ⚠️ 복지카드가 업로드된 근로자가 없습니다. 근로자가 최초 등록 시 복지카드를 업로드해야 합니다.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t">
+                <span className="text-sm text-slate-500">
+                  {employeesWithDocuments.length}명 / {filteredEmployees.length}명
+                </span>
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDownloadWelfareCards();
+                  }}
+                  disabled={downloadingWelfareCards || employeesWithDocuments.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={employeesWithDocuments.length === 0 ? '복지카드가 업로드된 근로자가 없습니다' : '복지카드 PDF 다운로드'}
+                >
+                  {downloadingWelfareCards ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      다운로드
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 중증장애인확인서 다운로드 */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-orange-50 rounded-lg">
+                  <FileImage className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">중증장애인확인서</CardTitle>
+                  <CardDescription className="mt-1">
+                    PDF 형식으로 다운로드
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                <p className="mb-2">다음 정보가 포함됩니다:</p>
+                <ul className="list-disc list-inside space-y-1 text-slate-500">
+                  <li>근로자별 중증장애인확인서 이미지</li>
+                  <li>각 페이지에 근로자 정보 표시</li>
+                  <li>성명, 전화번호, 장애유형</li>
+                </ul>
+                {employeesWithSevereCertificates.length === 0 && filteredEmployees.length > 0 && (
+                  <p className="mt-3 text-xs text-amber-600 font-medium">
+                    ⚠️ 중증장애인확인서가 업로드된 근로자가 없습니다. 근로자가 최초 등록 시 중증장애인확인서를 업로드해야 합니다.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t">
+                <span className="text-sm text-slate-500">
+                  총 {employeesWithSevereCertificates.length}명 / {filteredEmployees.length}명
+                </span>
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDownloadSevereCertificates();
+                  }}
+                  disabled={downloadingSevereCertificates || employeesWithSevereCertificates.length === 0}
+                  className="bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={employeesWithSevereCertificates.length === 0 ? '중증장애인확인서가 업로드된 근로자가 없습니다' : '중증장애인확인서 PDF 다운로드'}
+                >
+                  {downloadingSevereCertificates ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      다운로드
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -38,13 +38,24 @@ scp -i "$SSH_KEY_PATH" -r "$LOCAL_DIR/apps/backend/dist/"* "$EC2_HOST:~/app/back
 echo "   ✅ 파일 업로드 완료"
 echo ""
 
-# 3. 서버에서 백엔드 재시작
-echo "3. 서버에서 백엔드 재시작..."
+# 3. Prisma 스키마 및 마이그레이션 파일 업로드
+echo "3. Prisma 스키마 및 마이그레이션 파일 업로드..."
+scp -i "$SSH_KEY_PATH" "$LOCAL_DIR/apps/backend/prisma/schema.prisma" "$EC2_HOST:~/app/backend/prisma/" 2>&1 | tail -5
+scp -i "$SSH_KEY_PATH" -r "$LOCAL_DIR/apps/backend/prisma/migrations/"* "$EC2_HOST:~/app/backend/prisma/migrations/" 2>&1 | tail -5
+
+echo "   ✅ 파일 업로드 완료"
+echo ""
+
+# 4. 서버에서 마이그레이션 실행 및 백엔드 재시작
+echo "4. 서버에서 마이그레이션 실행 및 백엔드 재시작..."
 ssh -i "$SSH_KEY_PATH" "$EC2_HOST" << 'EOF'
   cd /home/ubuntu/app/backend
   
   echo "   Prisma generate 중..."
   npx prisma generate 2>&1 | tail -5
+  
+  echo "   Prisma 마이그레이션 실행 중..."
+  npx prisma migrate deploy 2>&1 | tail -10
   
   echo "   PM2 재시작 중..."
   pm2 restart backend-api 2>&1 || pm2 start ecosystem.config.js --env production 2>&1

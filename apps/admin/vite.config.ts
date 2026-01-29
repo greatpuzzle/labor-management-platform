@@ -21,5 +21,17 @@ export default defineConfig({
     port: 5173,
     host: true, // Allow access from network
   },
+  optimizeDeps: {
+    include: ['pdfjs-dist'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'pdfjs': ['pdfjs-dist'],
+        },
+      },
+    },
+  },
 })
 

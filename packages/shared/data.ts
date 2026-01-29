@@ -25,6 +25,8 @@ export type Employee = {
   emergencyContactPhone: string
   // 증빙서류 (선택사항)
   documentUrl?: string
+  // 추가사항 (근로계약서에 표시)
+  additionalTerms?: string
   // 민감정보 동의
   sensitiveInfoConsent: boolean
 }

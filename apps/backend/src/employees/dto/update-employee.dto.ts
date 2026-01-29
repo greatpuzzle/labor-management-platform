@@ -55,6 +55,14 @@ export class UpdateEmployeeDto {
   @IsOptional()
   documentUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  severeCertificateUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  additionalTerms?: string;
+
   @IsBoolean()
   @IsOptional()
   sensitiveInfoConsent?: boolean;
@@ -62,4 +70,12 @@ export class UpdateEmployeeDto {
   @IsEnum(ContractStatus)
   @IsOptional()
   contractStatus?: ContractStatus;
+
+  @IsString()
+  @IsOptional()
+  ci?: string;
+
+  @IsString()
+  @IsOptional()
+  kakaoId?: string;
 }

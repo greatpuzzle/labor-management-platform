@@ -76,6 +76,7 @@ export interface Company {
   phone: string;
   businessNumber?: string | null;
   stampImageUrl?: string | null;
+  lastWeeklyScheduleSentAt?: string | null; // 마지막 주간 업무 지시 완료 시간 (ISO 문자열)
 }
 
 export interface Employee {
@@ -93,6 +94,7 @@ export interface Employee {
   emergencyContactName: string;
   emergencyContactPhone: string;
   documentUrl?: string | null;
+  severeCertificateUrl?: string | null;
   residentNumber?: string | null;
   sensitiveInfoConsent: boolean;
   contractStatus: 'DRAFT' | 'SENT' | 'COMPLETED';
@@ -152,10 +154,11 @@ class ApiClient {
       (response) => response,
       (error: AxiosError) => {
         if (error.response?.status === 401) {
-          // 인증 실패 시 토큰 제거 및 로그인 페이지로 리다이렉트
+          // 인증 실패 시 토큰만 제거 (리다이렉트는 App에서 처리)
+          // window.location.href 사용 시 무한 리로드가 발생할 수 있으므로 제거
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');
-          window.location.href = '/';
+          // React 앱에서 user 상태가 null이 되면 자동으로 로그인 화면 표시
         }
         return Promise.reject(error);
       }
@@ -201,6 +204,11 @@ class ApiClient {
     return response.data.user;
   }
 
+  async updateMe(data: { name?: string; phone?: string; email?: string }): Promise<LoginResponse['user']> {
+    const response = await this.client.patch<{ user: LoginResponse['user'] }>('/api/auth/me', data);
+    return response.data.user;
+  }
+
   logout() {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
@@ -239,6 +247,7 @@ class ApiClient {
       emergencyContactName: string;
       emergencyContactPhone: string;
       documentUrl?: string;
+      severeCertificateUrl?: string;
       sensitiveInfoConsent: boolean;
     }
   ): Promise<Employee> {
@@ -273,6 +282,7 @@ class ApiClient {
       workingHours: string;
       salary: string;
       contractPeriod: string;
+      documentUrl?: string;
     }>
   ): Promise<Employee> {
     const response = await this.client.patch<Employee>(`/api/employees/${id}`, data);
@@ -283,13 +293,81 @@ class ApiClient {
     await this.client.delete(`/api/employees/${id}`);
   }
 
-  // 핸드폰 번호로 근로자 로그인
-  async loginByPhone(phone: string): Promise<{ employee: Employee; message: string }> {
+  // 핸드폰 번호로 근로자 로그인 (본인인증 CI 필수)
+  async loginByPhone(phone: string, ci: string): Promise<{ employee: Employee; message: string }> {
     const response = await this.client.post<{ employee: Employee; message: string }>(
       '/api/employees/login-by-phone',
-      { phone }
+      { phone, ci }
     );
     return response.data;
+  }
+
+  // 카카오 계정으로 회원가입 (계약서 ID 기반)
+  async registerByKakao(
+    accessToken: string,
+    contractId: string,
+  ): Promise<{ employee: Employee; message: string; isNew: boolean }> {
+    const response = await this.client.post<{
+      employee: Employee;
+      message: string;
+      isNew: boolean;
+    }>('/api/employees/register-by-kakao', {
+      accessToken,
+      contractId,
+    });
+    return response.data;
+  }
+
+  // 카카오 소셜 로그인
+  async loginByKakao(accessToken: string): Promise<{ employee: Employee; message: string }> {
+    const response = await this.client.post<{ employee: Employee; message: string }>(
+      '/api/employees/login-by-kakao',
+      { accessToken }
+    );
+    return response.data;
+  }
+
+  // ========== Verification (다날 본인인증) ==========
+
+  /**
+   * 본인인증 요청 (인증번호 발송)
+   */
+  async requestVerification(phone: string): Promise<{ identityVerificationId: string; message: string }> {
+    const response = await this.client.post<{ success: boolean; identityVerificationId: string; message: string }>(
+      '/api/verification/request',
+      { phone }
+    );
+    return {
+      identityVerificationId: response.data.identityVerificationId,
+      message: response.data.message,
+    };
+  }
+
+  /**
+   * 본인인증 확인 (인증번호 검증)
+   */
+  async verifyCode(identityVerificationId: string, code: string): Promise<{
+    name: string;
+    birthDate: string;
+    phone: string;
+    ci: string;
+  }> {
+    const response = await this.client.post<{
+      success: boolean;
+      name: string;
+      birthDate: string;
+      phone: string;
+      ci: string;
+    }>('/api/verification/verify', {
+      identityVerificationId,
+      code,
+    });
+    return {
+      name: response.data.name,
+      birthDate: response.data.birthDate,
+      phone: response.data.phone,
+      ci: response.data.ci,
+    };
   }
 
   // ========== Notifications ==========
@@ -454,6 +532,31 @@ class ApiClient {
 
     const response = await this.client.post<WorkSchedule[]>(
       `/api/work-schedules/${employeeId}/weekly?${params.toString()}`
+    );
+    return response.data;
+  }
+
+  async createWeeklyScheduleForCompany(
+    companyId: string,
+    startDate?: Date
+  ): Promise<{
+    success: number;
+    failed: number;
+    results: Array<{ employeeId: string; employeeName: string; schedules: WorkSchedule[] }>;
+    errors: Array<{ employeeId: string; employeeName: string; error: string }>;
+  }> {
+    const params = new URLSearchParams();
+    if (startDate) {
+      params.append('startDate', startDate.toISOString().split('T')[0]);
+    }
+
+    const response = await this.client.post<{
+      success: number;
+      failed: number;
+      results: Array<{ employeeId: string; employeeName: string; schedules: WorkSchedule[] }>;
+      errors: Array<{ employeeId: string; employeeName: string; error: string }>;
+    }>(
+      `/api/work-schedules/company/${companyId}/weekly?${params.toString()}`
     );
     return response.data;
   }

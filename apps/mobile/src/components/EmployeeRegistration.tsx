@@ -18,8 +18,8 @@ interface EmployeeRegistrationProps {
     disabilityRecognitionDate: string;
     emergencyContactName: string;
     emergencyContactPhone: string;
-    welfareCardUrl?: string;
-    severeCertificateUrl?: string;
+    welfareCardFile?: File; // 파일 객체로 변경
+    severeCertificateFile?: File; // 중증장애인 확인서 파일 객체
     sensitiveInfoConsent: boolean;
     // 근로조건 기본값
     contractPeriod: string;
@@ -92,7 +92,7 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
     e.preventDefault();
     if (!personalInfoAgreed || !sensitiveInfoAgreed) return;
 
-    // 파일 업로드는 백엔드 구현 시 처리 예정
+    // 복지카드 파일을 직접 전달 (App.tsx에서 업로드 처리)
     onSubmit({
       name,
       phone,
@@ -102,8 +102,8 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
       disabilityRecognitionDate,
       emergencyContactName,
       emergencyContactPhone,
-      welfareCardUrl: welfareCardFile?.name,
-      severeCertificateUrl: severeCertificateFile?.name,
+      welfareCardFile: welfareCardFile || undefined, // 파일 객체 전달
+      severeCertificateFile: severeCertificateFile || undefined, // 파일 객체 전달
       sensitiveInfoConsent: sensitiveInfoAgreed,
       // 근로조건 기본값
       contractPeriod: getContractPeriod(),
@@ -154,7 +154,7 @@ export function EmployeeRegistration({ companyName, onSubmit, onHome }: Employee
                     </div>
                 </div>
                 <p className="text-sm text-amber-700 leading-relaxed">
-                  관리자가 근로계약서를 발송하면<br/>
+                  {companyName}에서 근로계약서를 발송하면<br/>
                   <span className="font-bold">카카오톡 알림</span>으로 안내해 드립니다.
                 </p>
             </div>

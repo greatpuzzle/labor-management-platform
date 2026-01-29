@@ -39,6 +39,8 @@ import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import { User as UserType } from "@shared/data" 
 import { StampManager } from "./StampManager"
+import { api } from "@shared/api"
+import { toast } from "sonner"
 import svgPaths from "./svg-zgax4pilyk"
 
 // SVG Components from Figma
@@ -165,27 +167,66 @@ const items = [
 ]
 
 interface AppSidebarProps {
-  user: UserType;
+  user: UserType | { 
+    id: string;
+    name: string;
+    role: 'super_admin' | 'company_admin' | 'SUPER_ADMIN' | 'COMPANY_ADMIN';
+    companyId?: string | null;
+    email: string;
+    phone: string;
+    company?: {
+      id: string;
+      name: string;
+      ceo: string;
+      address: string;
+      phone: string;
+      businessNumber: string | null;
+      stampImageUrl: string | null;
+    };
+  };
   onLogout: () => void;
+  onUpdateUser?: (data: { name?: string; phone?: string; email?: string }) => Promise<any>;
   stampImage: string | null;
   setStampImage: (image: string | null) => void;
   activeTab?: string;
   onTabChange?: (tab: string) => void;
 }
 
-export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTab, onTabChange }: AppSidebarProps) {
+export function AppSidebar({ user, onLogout, onUpdateUser, stampImage, setStampImage, activeTab, onTabChange }: AppSidebarProps) {
   // Admin Info State
   const [adminName, setAdminName] = React.useState(user.name)
   const [adminPhone, setAdminPhone] = React.useState(user.phone)
   const [adminEmail, setAdminEmail] = React.useState(user.email)
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false)
   const [isStampManagerOpen, setIsStampManagerOpen] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
 
   React.useEffect(() => {
     setAdminName(user.name)
     setAdminPhone(user.phone)
     setAdminEmail(user.email)
   }, [user])
+
+  const handleSaveAdminInfo = async () => {
+    if (!onUpdateUser) {
+      setIsAdminModalOpen(false)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await onUpdateUser({
+        name: adminName,
+        phone: adminPhone,
+        email: adminEmail,
+      })
+      setIsAdminModalOpen(false)
+    } catch (error) {
+      // Error is already handled in onUpdateUser
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const handleMenuClick = (item: any) => {
       if (onTabChange && item.value) {
@@ -201,7 +242,7 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                <LogoIcon />
            </div>
            <div className="flex flex-col">
-               <span className="text-[13px] font-normal text-[#2E6B4E] leading-tight">경기도청 관리자 대시보드</span>
+               <span className="text-[13px] font-normal text-[#2E6B4E] leading-tight">Ecowork 관리 대시보드</span>
                <span className="text-[10px] text-[#2E6B4E] font-light mt-0.5 leading-tight">
                    AI 기반 역순환 자판기<br/>모니터링 시스템
                </span>
@@ -264,8 +305,10 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                  <div className="absolute bottom-0 right-0 size-[10px] bg-[#00C950] border-2 border-slate-50 rounded-full"></div>
              </div>
              <div className="flex flex-col">
-                 <span className="text-[13.2px] font-medium text-[#2E6B4E]">{adminName}</span>
-                 <span className="text-[11.3px] text-[#2E6B4E] font-light">{user.role === 'super_admin' ? '시스템 관리자' : '기업 관리자'}</span>
+                 <span className="text-[13.2px] font-medium text-[#2E6B4E]">
+                   {(user.role === 'super_admin' || user.role === 'SUPER_ADMIN') ? '그레이트퍼즐' : (user.company?.name || '')}
+                 </span>
+                 <span className="text-[11.3px] text-[#2E6B4E] font-light">{(user.role === 'super_admin' || user.role === 'SUPER_ADMIN') ? '시스템 관리자' : '기업 관리자'}</span>
              </div>
           </div>
       </SidebarFooter>
@@ -314,12 +357,12 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                <div className="flex items-center gap-4">
                   <Label className="w-24 text-right shrink-0">기관명</Label>
                   <div className="flex-1 text-slate-900 font-medium pl-3">
-                     {user.role === 'super_admin' ? '경기도청 (HQ)' : '(주)글로벌트레이드'}
+                     {(user.role === 'super_admin' || user.role === 'SUPER_ADMIN') ? '그레이트퍼즐' : (user.company?.name || '')}
                   </div>
                </div>
 
-               {/* 직인 관리 버튼 (Company Admin Only) */}
-               {user.role === 'company_admin' && (
+               {/* 직인 관리 버튼 */}
+               {(user.role === 'company_admin' || user.role === 'COMPANY_ADMIN' || user.role === 'super_admin' || user.role === 'SUPER_ADMIN') && (
                   <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="flex items-center gap-3">
                           <div className="bg-white p-2 rounded-full border shadow-sm">
@@ -343,11 +386,15 @@ export function AppSidebar({ user, onLogout, stampImage, setStampImage, activeTa
                   로그아웃
                </Button>
                <div className="flex gap-2">
-                 <Button variant="outline" onClick={() => setIsAdminModalOpen(false)}>
+                 <Button variant="outline" onClick={() => setIsAdminModalOpen(false)} disabled={isSaving}>
                     취소
                  </Button>
-                 <Button className="bg-[#2E6B4E] hover:bg-[#24543D] text-white font-bold" onClick={() => setIsAdminModalOpen(false)}>
-                    저장하기
+                 <Button 
+                   className="bg-[#2E6B4E] hover:bg-[#24543D] text-white font-bold" 
+                   onClick={handleSaveAdminInfo}
+                   disabled={isSaving}
+                 >
+                   {isSaving ? '저장 중...' : '저장하기'}
                  </Button>
                </div>
            </DialogFooter>

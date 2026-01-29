@@ -43,6 +43,10 @@ export class CreateEmployeeDto {
   @IsOptional()
   documentUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  severeCertificateUrl?: string;
+
   @IsBoolean()
   @IsOptional()
   sensitiveInfoConsent?: boolean;

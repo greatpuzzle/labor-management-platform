@@ -11,29 +11,34 @@ echo "🚀 Mobile 앱 재배포..."
 echo ""
 
 # 1. Mobile 앱 빌드
-echo "1. Mobile 앱 빌드 중..."
+echo "1. Mobile 앱 빌드 확인 중..."
 cd "$LOCAL_DIR/apps/mobile"
 
-# 기존 파일 삭제
-if [ -d "dist" ]; then
-  echo "   기존 dist 폴더 삭제 중..."
-  rm -rf dist
+# 빌드가 이미 완료되었는지 확인
+if [ -d "dist" ] && [ -f "dist/index.html" ]; then
+  echo "   ✅ 빌드된 파일이 이미 존재합니다. 빌드를 건너뜁니다."
+else
+  # 기존 파일 삭제
+  if [ -d "dist" ]; then
+    echo "   기존 dist 폴더 삭제 중..."
+    rm -rf dist
+  fi
+
+  if [ -d "node_modules/.vite" ]; then
+    echo "   Vite 캐시 삭제 중..."
+    rm -rf node_modules/.vite
+  fi
+
+  echo "   빌드 중..."
+  npm run build --loglevel=error 2>&1 | tail -20
+
+  if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
+    echo "   ❌ 빌드 실패"
+    exit 1
+  fi
+
+  echo "   ✅ 빌드 완료"
 fi
-
-if [ -d "node_modules/.vite" ]; then
-  echo "   Vite 캐시 삭제 중..."
-  rm -rf node_modules/.vite
-fi
-
-echo "   빌드 중..."
-npm run build 2>&1 | tail -10
-
-if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
-  echo "   ❌ 빌드 실패"
-  exit 1
-fi
-
-echo "   ✅ 빌드 완료"
 echo ""
 
 # 2. EC2 서버에 배포 (PM2가 서빙하는 실제 경로로 배포)
@@ -43,7 +48,7 @@ echo "   업로드: apps/mobile/dist/* -> $EC2_HOST:$DEPLOY_PATH/"
 
 # 서버의 기존 assets 폴더 삭제 후 새 파일 업로드
 ssh -i "$SSH_KEY_PATH" "$EC2_HOST" "rm -rf $DEPLOY_PATH/assets"
-scp -i "$SSH_KEY_PATH" -r "$LOCAL_DIR/apps/mobile/dist/"* "$EC2_HOST:$DEPLOY_PATH/" 2>&1 | tail -5
+scp -i "$SSH_KEY_PATH" -r "$LOCAL_DIR/apps/mobile/dist/." "$EC2_HOST:$DEPLOY_PATH/" 2>&1 | tail -5
 
 echo "   ✅ 배포 완료"
 echo ""

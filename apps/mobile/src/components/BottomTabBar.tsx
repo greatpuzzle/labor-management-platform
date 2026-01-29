@@ -15,8 +15,8 @@ export function BottomTabBar({ activeTab, onTabChange }: BottomTabBarProps) {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 safe-area-inset-bottom">
-      <div className="h-16 flex items-center justify-around px-2">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50">
+      <div className="h-[72px] flex items-center justify-around px-4 pb-safe">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -27,21 +27,21 @@ export function BottomTabBar({ activeTab, onTabChange }: BottomTabBarProps) {
               onClick={() => onTabChange(tab.id)}
               className={cn(
                 'flex flex-col items-center justify-center flex-1 h-full py-2 transition-all',
-                isActive ? 'text-emerald-600' : 'text-slate-400'
+                'active:scale-95'
               )}
             >
               <div className={cn(
-                'p-1.5 rounded-xl transition-all',
-                isActive && 'bg-emerald-50'
+                'w-10 h-10 rounded-xl flex items-center justify-center transition-all mb-0.5',
+                isActive ? 'bg-[#2E6B4E]' : 'bg-transparent'
               )}>
                 <Icon className={cn(
-                  'h-5 w-5 transition-all',
-                  isActive && 'text-emerald-600'
-                )} />
+                  'h-[22px] w-[22px] transition-all',
+                  isActive ? 'text-white' : 'text-slate-400'
+                )} strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span className={cn(
-                'text-[11px] mt-1 font-medium transition-all',
-                isActive && 'text-emerald-600 font-semibold'
+                'text-[11px] font-medium transition-all',
+                isActive ? 'text-[#2E6B4E]' : 'text-slate-400'
               )}>
                 {tab.label}
               </span>

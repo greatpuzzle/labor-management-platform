@@ -98,6 +98,41 @@ export class WorkSchedulesController {
   }
 
   /**
+   * 회사 전체에 대한 주간 업무 지시
+   * POST /api/work-schedules/company/:companyId/weekly
+   */
+  @Post('company/:companyId/weekly')
+  async createWeeklyScheduleForCompany(
+    @Param('companyId') companyId: string,
+    @Query('startDate') startDateStr?: string,
+  ) {
+    try {
+      const startDate = startDateStr
+        ? new Date(startDateStr)
+        : new Date(); // 기본값: 오늘
+
+      if (isNaN(startDate.getTime())) {
+        throw new BadRequestException('Invalid date format');
+      }
+
+      console.log(`[WorkSchedulesController] Creating weekly schedule for company ${companyId}, startDate: ${startDate.toISOString()}`);
+      const result = await this.workSchedulesService.createWeeklyScheduleForCompany(companyId, startDate);
+      console.log(`[WorkSchedulesController] Weekly schedule created successfully for company ${companyId}`);
+      return result;
+    } catch (error: any) {
+      console.error(`[WorkSchedulesController] Error creating weekly schedule for company ${companyId}:`, error);
+      console.error(`[WorkSchedulesController] Error stack:`, error?.stack);
+      console.error(`[WorkSchedulesController] Error message:`, error?.message);
+      if (error?.status && error?.message) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error?.message || `Failed to create weekly schedule for company: ${error}`
+      );
+    }
+  }
+
+  /**
    * 업무 스케줄 삭제
    * DELETE /api/work-schedules/:id
    */

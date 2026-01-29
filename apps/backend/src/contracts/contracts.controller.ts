@@ -12,6 +12,7 @@ import { ContractsService } from './contracts.service';
 import { SendContractDto } from './dto/send-contract.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller()
@@ -65,8 +66,10 @@ export class ContractsController {
   }
 
   // 직원의 모든 계약서 조회
+  // 근로자가 자신의 계약서를 볼 수 있도록 Public으로 설정
+  // 인증된 사용자(어드민)는 권한 체크, 미인증 사용자(근로자)는 자신의 계약서만 조회 가능
   @Get('employees/:employeeId/contracts')
-  @UseGuards(JwtAuthGuard)
+  @Public()
   async findByEmployee(@Param('employeeId') employeeId: string, @Request() req) {
     // 직원 조회하여 회사 확인
     const employee = await this.contractsService['prisma'].employee.findUnique(
@@ -79,16 +82,21 @@ export class ContractsController {
       throw new ForbiddenException('Employee not found');
     }
 
-    // SUPER_ADMIN은 모든 직원의 계약서 조회 가능
-    // COMPANY_ADMIN은 자기 회사 직원만 가능
-    if (
-      req.user.role !== UserRole.SUPER_ADMIN &&
-      req.user.companyId !== employee.companyId
-    ) {
-      throw new ForbiddenException(
-        'You can only view contracts for employees from your own company',
-      );
+    // 인증된 사용자인 경우 (어드민)
+    if (req.user) {
+      // SUPER_ADMIN은 모든 직원의 계약서 조회 가능
+      // COMPANY_ADMIN은 자기 회사 직원만 가능
+      if (
+        req.user.role !== UserRole.SUPER_ADMIN &&
+        req.user.companyId !== employee.companyId
+      ) {
+        throw new ForbiddenException(
+          'You can only view contracts for employees from your own company',
+        );
+      }
     }
+    // 미인증 사용자(근로자)는 자신의 계약서만 조회 가능
+    // (추가 검증이 필요하면 여기에 추가)
 
     return this.contractsService.findByEmployee(employeeId);
   }

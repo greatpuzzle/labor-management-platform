@@ -11,6 +11,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { WorkRecordsModule } from './work-records/work-records.module';
 import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { VerificationModule } from './verification/verification.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { PushNotificationsModule } from './push-notifications/push-notifications
     WorkRecordsModule,
     WorkSchedulesModule,
     PushNotificationsModule,
+    VerificationModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

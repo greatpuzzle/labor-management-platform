@@ -25,17 +25,18 @@ model User {
 }
 
 model Company {
-  id             String     @id @default(cuid())
-  name           String
-  ceo            String
-  address        String
-  phone          String
-  stampImageUrl  String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  businessNumber String?
-  employees      Employee[]
-  users          User[]
+  id                      String     @id @default(cuid())
+  name                    String
+  ceo                     String
+  address                 String
+  phone                   String
+  stampImageUrl           String?
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+  businessNumber          String?
+  lastWeeklyScheduleSentAt DateTime? // 마지막 주간 업무 지시 완료 시간
+  employees               Employee[]
+  users                   User[]
 
   @@map("companies")
 }
@@ -55,11 +56,15 @@ model Employee {
   emergencyContactName      String
   emergencyContactPhone     String
   documentUrl               String?
+  severeCertificateUrl      String?                // 중증장애인확인서 사본 URL
+  additionalTerms           String?                // 추가사항 (근로계약서에 표시)
   sensitiveInfoConsent      Boolean                @default(false)
   contractStatus            ContractStatus         @default(DRAFT)
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
   residentNumber            String?
+  ci                        String?                // 본인인증 고유값 (CI)
+  kakaoId                   String?                // 카카오 사용자 ID (소셜 로그인용)
   contracts                 Contract[]
   company                   Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   workRecords               WorkRecord[]
@@ -68,16 +73,19 @@ model Employee {
 
   @@index([companyId])
   @@index([contractStatus])
+  @@index([ci])
+  @@index([kakaoId])
   @@map("employees")
 }
 
 model Contract {
-  id             String         @id @default(cuid())
-  employeeId     String
-  workingHours   String
-  salary         String
-  contractPeriod String
-  signedAt       DateTime?
+  id              String         @id @default(cuid())
+  employeeId      String
+  workingHours    String
+  salary          String
+  contractPeriod  String
+  additionalTerms String?        // 추가사항
+  signedAt        DateTime?
   signatureUrl   String?
   pdfUrl         String?
   status         ContractStatus @default(DRAFT)

@@ -99,13 +99,36 @@ interface Company {
   stampImageUrl: string | null;
 }
 
+// 초기 사용자 상태를 localStorage에서 동기적으로 읽어옴 (깜빡임 방지)
+const getInitialUser = (): User | null => {
+  if (typeof window === 'undefined') return null;
+  const storedUser = localStorage.getItem('user');
+  const storedToken = localStorage.getItem('accessToken');
+  if (storedUser && storedToken) {
+    try {
+      return JSON.parse(storedUser);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+// 초기 invite 파라미터 확인 (깜빡임 방지)
+const getInitialInviteId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('invite');
+};
+
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  // 초기 상태를 동기적으로 설정하여 첫 렌더링부터 올바른 화면 표시
+  const [user, setUser] = useState<User | null>(getInitialUser);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stampImage, setStampImage] = useState<string | null>(null);
-  const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
+  const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(getInitialInviteId);
   const [companyName, setCompanyName] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true); // 초기 데이터 로딩 상태
   const [activeTab, setActiveTab] = useState<string>('contracts');
 
   // Super Admin - 회사 선택 기능 (각 탭별로 독립적으로 관리)
@@ -118,59 +141,83 @@ export default function App() {
   const [showEmployeeContract, setShowEmployeeContract] = useState(false);
   const [currentEmployeeName, setCurrentEmployeeName] = useState("");
 
-  // Load user from localStorage on mount
+  // 초기 데이터 로드 (user는 이미 동기적으로 설정됨)
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
+    let isMounted = true;
 
-        // 슈퍼 관리자인 경우 모든 회사 로드
-        if (parsedUser.role === 'SUPER_ADMIN') {
-          loadAllCompanies();
-        } else if (parsedUser.companyId) {
-          // 일반 관리자는 자신의 회사 직원 로드
-          loadEmployees(parsedUser.companyId);
-          // 회사 선택 state도 설정
-          setSelectedCompanyIdForContracts(parsedUser.companyId);
-          setSelectedCompanyIdForWorkRecords(parsedUser.companyId);
-          setSelectedCompanyIdForDocuments(parsedUser.companyId);
-        }
-      } catch (error) {
-        console.error('Failed to parse user from localStorage:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
+    const initializeData = async () => {
+      // invite 링크가 있으면 회사명 로드
+      if (inviteCompanyId) {
+        await loadCompanyName(inviteCompanyId);
       }
-    }
-    setLoading(false);
-  }, []);
 
-  // 슈퍼 관리자가 계약 관리 탭에서 회사를 선택했을 때
+      // user가 있으면 추가 데이터 로드
+      if (user) {
+        try {
+          if (user.role === 'SUPER_ADMIN') {
+            // 1. 회사 목록 로드
+            const companies = await api.getCompanies();
+            if (!isMounted) return;
+
+            setAllCompanies(companies);
+
+            // 2. 첫 번째 회사 선택 및 직원 로드 (한 번에 처리)
+            if (companies.length > 0) {
+              const firstCompanyId = companies[0].id;
+              setSelectedCompanyIdForContracts(firstCompanyId);
+              setSelectedCompanyIdForWorkRecords(firstCompanyId);
+              setSelectedCompanyIdForDocuments(firstCompanyId);
+
+              // 3. 첫 번째 회사의 직원 로드 (Dashboard 표시 전에 완료)
+              await loadEmployees(firstCompanyId);
+            }
+          } else if (user.companyId) {
+            setSelectedCompanyIdForContracts(user.companyId);
+            setSelectedCompanyIdForWorkRecords(user.companyId);
+            setSelectedCompanyIdForDocuments(user.companyId);
+            await loadEmployees(user.companyId);
+          }
+        } catch (error: any) {
+          // 401 에러 시 로그아웃 처리
+          if (error.response?.status === 401) {
+            console.log('[App] Token expired, logging out');
+            localStorage.removeItem('user');
+            localStorage.removeItem('accessToken');
+            if (isMounted) setUser(null);
+            return;
+          }
+        }
+      }
+
+      if (isMounted) setInitializing(false);
+    };
+
+    initializeData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // 마운트 시 한 번만 실행
+
+  // 슈퍼 관리자가 계약 관리 탭에서 회사를 변경했을 때 (초기 로드 제외)
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   useEffect(() => {
+    // 초기 로드 시에는 이미 initializeData에서 처리했으므로 스킵
+    if (isInitialLoad) {
+      setIsInitialLoad(false);
+      return;
+    }
+
     if (user?.role === 'SUPER_ADMIN' && selectedCompanyIdForContracts) {
-      loadEmployees(selectedCompanyIdForContracts);
+      loadEmployees(selectedCompanyIdForContracts).catch((error: any) => {
+        if (error.response?.status === 401) {
+          setUser(null);
+        }
+      });
     }
   }, [selectedCompanyIdForContracts]);
 
-  // 슈퍼 관리자가 서류 다운로드 탭에서 회사를 선택했을 때
-  useEffect(() => {
-    if (user?.role === 'SUPER_ADMIN' && selectedCompanyIdForDocuments) {
-      // 서류 다운로드 탭은 자체적으로 직원을 로드하므로 여기서는 로드하지 않음
-      // DocumentDownloadDashboard 내부에서 직접 로드
-    }
-  }, [selectedCompanyIdForDocuments]);
-
-  // Check for invite link
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const invite = params.get('invite');
-    if (invite) {
-      setInviteCompanyId(invite);
-      // Load company name
-      loadCompanyName(invite);
-    }
-  }, []);
 
   const loadCompanyName = async (companyId: string) => {
     try {
@@ -182,21 +229,6 @@ export default function App() {
     }
   };
 
-  const loadAllCompanies = async () => {
-    try {
-      const companies = await api.getCompanies();
-      setAllCompanies(companies);
-      // 첫 번째 회사를 기본으로 선택 (각 탭별로)
-      if (companies.length > 0) {
-        setSelectedCompanyIdForContracts(companies[0].id);
-        setSelectedCompanyIdForWorkRecords(companies[0].id);
-        setSelectedCompanyIdForDocuments(companies[0].id);
-      }
-    } catch (error: any) {
-      console.error('Failed to load companies:', error);
-      toast.error('회사 목록을 불러오는데 실패했습니다.');
-    }
-  };
 
   const loadEmployees = async (companyId: string) => {
     try {
@@ -224,16 +256,31 @@ export default function App() {
         phone: response.user.phone,
         company: response.user.company,
       };
-      setUser(userData);
-      console.log('[App] User state updated:', userData);
 
-      // 슈퍼 관리자인 경우 모든 회사 로드
+      // 슈퍼 관리자인 경우 회사 목록과 직원을 먼저 로드
       if (userData.role === 'SUPER_ADMIN') {
-        await loadAllCompanies();
+        const companies = await api.getCompanies();
+        setAllCompanies(companies);
+
+        if (companies.length > 0) {
+          const firstCompanyId = companies[0].id;
+          setSelectedCompanyIdForContracts(firstCompanyId);
+          setSelectedCompanyIdForWorkRecords(firstCompanyId);
+          setSelectedCompanyIdForDocuments(firstCompanyId);
+          await loadEmployees(firstCompanyId);
+        }
       } else if (userData.companyId) {
         // 일반 관리자는 자신의 회사 직원 로드
+        setSelectedCompanyIdForContracts(userData.companyId);
+        setSelectedCompanyIdForWorkRecords(userData.companyId);
+        setSelectedCompanyIdForDocuments(userData.companyId);
         await loadEmployees(userData.companyId);
       }
+
+      // 모든 데이터 로드 후 user 설정 (깜빡임 방지)
+      setUser(userData);
+      setIsInitialLoad(true); // 다음 회사 변경 시 useEffect가 동작하도록
+      console.log('[App] User state updated:', userData);
 
       toast.success('로그인 성공!');
     } catch (error: any) {
@@ -249,6 +296,30 @@ export default function App() {
     setEmployees([]);
     setStampImage(null);
     toast.success('로그아웃되었습니다.');
+  };
+
+  const handleUpdateUser = async (data: { name?: string; phone?: string; email?: string }) => {
+    try {
+      const updatedUser = await api.updateMe(data);
+      const userData: User = {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        companyId: updatedUser.companyId,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        company: updatedUser.company,
+      };
+      setUser(userData);
+      // localStorage에도 업데이트
+      localStorage.setItem('user', JSON.stringify(userData));
+      toast.success('관리자 정보가 업데이트되었습니다.');
+      return userData;
+    } catch (error: any) {
+      console.error('[App] Update user failed:', error);
+      toast.error(error.response?.data?.message || '관리자 정보 업데이트에 실패했습니다.');
+      throw error;
+    }
   };
 
   const handleSimulateInvite = () => {
@@ -289,29 +360,32 @@ export default function App() {
   // 1. Employee Contract App Flow (Priority 1)
   if (showEmployeeContract) {
       return (
-        <EmployeeContractApp 
+        <EmployeeContractApp
             employeeName={currentEmployeeName}
             onClose={() => {
                 setShowEmployeeContract(false);
                 setInviteCompanyId(null);
                 setCurrentEmployeeName("");
-            }} 
+            }}
         />
       );
   }
 
   // 2. Invite/Registration View (Priority 2)
   if (inviteCompanyId) {
-     if (!companyName && loading) {
+     // 회사명 로딩 중
+     if (!companyName && initializing) {
        return (
          <div className="min-h-screen flex items-center justify-center bg-slate-50">
            <div className="text-center">
+             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
              <p className="text-slate-500">로딩 중...</p>
            </div>
          </div>
        );
      }
 
+     // 유효하지 않은 회사
      if (!companyName) {
        return (
          <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -333,17 +407,30 @@ export default function App() {
      );
   }
 
-  // 3. Login View (Priority 3)
+  // 3. 초기화 중이고 user가 있으면 로딩 화면 표시 (깜빡임 방지)
+  if (initializing && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-500">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Login View
   if (!user) {
     return <Login onLogin={handleLogin} onSimulateInvite={handleSimulateInvite} />;
   }
 
-  // 4. Admin Dashboard (Priority 4)
+  // 5. Admin Dashboard
   return (
     <SidebarProvider>
       <AppSidebar
         user={user}
         onLogout={handleLogout}
+        onUpdateUser={handleUpdateUser}
         stampImage={stampImage}
         setStampImage={setStampImage}
         activeTab={activeTab}
