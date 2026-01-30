@@ -100,6 +100,14 @@ export interface Employee {
   contractStatus: 'DRAFT' | 'SENT' | 'COMPLETED';
   createdAt: string;
   updatedAt: string;
+  company?: {
+    id: string;
+    name: string;
+    ceo: string;
+    address: string;
+    phone: string;
+    stampImageUrl: string | null;
+  };
 }
 
 export interface WorkRecord {

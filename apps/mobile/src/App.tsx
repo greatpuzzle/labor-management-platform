@@ -15,7 +15,7 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 
 type Tab = 'home' | 'payroll' | 'mypage';
-type AppState = 'splash' | 'registration' | 'contract' | 'contract-install-required' | 'waiting-for-contract' | 'main';
+type AppState = 'splash' | 'registration' | 'contract' | 'contract-kakao-login' | 'contract-install-required' | 'waiting-for-contract' | 'main';
 
 export default function App() {
   // localStorage에서 저장된 정보 가져오기
@@ -88,20 +88,23 @@ export default function App() {
       const contractData = await api.getContract(contractId);
       if (contractData && contractData.employee) {
         setContract(contractData);
+        setContractId(contractId);
         
-        // 계약서 작성 시 자동 로그인: employee 정보로 바로 로그인 처리
+        // 계약서 링크 접속 시 카카오 로그인을 먼저 진행
+        // employee 정보가 없거나 kakaoId가 없으면 카카오 로그인 화면으로 이동
         const employee = contractData.employee;
-        setEmployeeId(employee.id);
-        setEmployeeName(employee.name);
-        setCompanyName(employee.company?.name || '');
         
-        // localStorage에 저장 (계약서 서명 완료 전이지만 계약서 작성 중이므로 임시 저장)
-        localStorage.setItem('employeeId', employee.id);
-        localStorage.setItem('employeeName', employee.name);
-        localStorage.setItem('companyName', employee.company?.name || '');
-        
-        // 계약서 서명 화면 표시
-        setAppState('contract');
+        // 이미 카카오 로그인이 되어 있고 employee 정보가 있으면 바로 계약서 화면으로
+        if (employee.kakaoId) {
+          // 이미 회원가입된 상태 → 계약서 서명 화면으로
+          setEmployeeId(employee.id);
+          setEmployeeName(employee.name);
+          setCompanyName(employee.company?.name || '');
+          setAppState('contract');
+        } else {
+          // 카카오 로그인이 필요한 상태 → PhoneLogin 화면으로 (contractId 전달)
+          setAppState('contract-kakao-login');
+        }
       } else {
         toast.error('계약서 정보를 불러올 수 없습니다.');
       }
@@ -650,6 +653,7 @@ export default function App() {
         <EmployeeContractApp
           contract={contract}
           employeeName={employeeName}
+          contractId={contractId}
           onClose={() => {
             setContract(null);
             setContractId(null);
@@ -852,6 +856,20 @@ export default function App() {
             <p className="text-slate-500">로딩 중...</p>
           </div>
         </div>
+        <Toaster />
+      </>
+    );
+  }
+
+  // 6. 계약서 서명을 위한 카카오 로그인 화면
+  if (appState === 'contract-kakao-login' && contractId) {
+    return (
+      <>
+        <PhoneLogin 
+          onLoginSuccess={handlePhoneLoginSuccess} 
+          contractId={contractId}
+          isContractSigning={true}
+        />
         <Toaster />
       </>
     );

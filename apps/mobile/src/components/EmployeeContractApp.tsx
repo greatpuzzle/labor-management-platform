@@ -13,9 +13,11 @@ interface EmployeeContractAppProps {
   onClose: () => void;
   onWorkStart?: () => void;
   employeeName?: string;
+  contractId?: string | null; // 계약서 ID (카카오 회원가입 시 필요)
+  onKakaoLoginRequired?: (contractId: string) => void; // 카카오 로그인 필요 시 콜백
 }
 
-export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeName = "홍길동" }: EmployeeContractAppProps) {
+export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeName = "홍길동", contractId, onKakaoLoginRequired }: EmployeeContractAppProps) {
   // Props 디버깅
   useEffect(() => {
     console.log('[EmployeeContractApp] Props:', {
@@ -258,6 +260,18 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
           return;
       }
 
+      // 계약 정보 확인
+      if (!contract || !contract.employee || !contract.employee.id) {
+          toast.error('계약서 정보를 찾을 수 없습니다.');
+          return;
+      }
+
+      // employeeId가 없으면 카카오 로그인이 필요함 (이미 계약서 화면에 왔다는 것은 로그인 완료 상태)
+      if (!contract.employee.kakaoId) {
+          toast.error('카카오 로그인이 필요합니다.');
+          return;
+      }
+
       // 서명 데이터 저장
       const signatureDataUrlValue = canvas.toDataURL('image/png');
       const signatureBase64 = signatureDataUrlValue.split(',')[1]; // base64 데이터만 추출
@@ -267,11 +281,11 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
 
       const toastId = toast.loading('계약서 서명 중...');
 
-      try {
-          // 계약서 PDF 생성 (A4 형식)
-          if (!contractRef.current) {
-              throw new Error('계약서 요소를 찾을 수 없습니다.');
-          }
+          try {
+              // 계약서 PDF 생성 (A4 형식)
+              if (!contractRef.current) {
+                  throw new Error('계약서 요소를 찾을 수 없습니다.');
+              }
 
           // 숨겨진 계약서를 표시하여 서명 이미지 포함
           contractRef.current.style.display = 'block';
@@ -466,33 +480,33 @@ export function EmployeeContractApp({ contract, onClose, onWorkStart, employeeNa
               reader.readAsDataURL(pdfBlob);
           });
 
-          // 계약서 서명 API 호출 (contractId 사용)
-          if (!contract || !contract.id) {
-              throw new Error('계약서 ID를 찾을 수 없습니다.');
-          }
-          
-          const result = await api.signContract(
-              contract.id,
-              signatureBase64,
-              pdfBase64
-          );
+              // 계약서 서명 API 호출 (contractId 사용)
+              if (!contract || !contract.id) {
+                  throw new Error('계약서 ID를 찾을 수 없습니다.');
+              }
+              
+              const result = await api.signContract(
+                  contract.id,
+                  signatureBase64,
+                  pdfBase64
+              );
 
-          console.log('✅ 계약서 서명 완료:', result);
-          
-          // 서명 완료 상태로 전환
-          setStep('completed');
-          
-          toast.success('계약서 서명이 완료되었습니다!', { id: toastId });
-      } catch (error: any) {
-          console.error('계약서 서명 실패:', error);
-          toast.error(error.response?.data?.message || '계약서 서명에 실패했습니다.', { id: toastId });
-      } finally {
-          // 계약서 요소 다시 숨김
-          if (contractRef.current) {
-              contractRef.current.style.display = 'none';
-              contractRef.current.style.visibility = 'hidden';
+              console.log('✅ 계약서 서명 완료:', result);
+              
+              // 서명 완료 상태로 전환
+              setStep('completed');
+              
+              toast.success('계약서 서명이 완료되었습니다!', { id: toastId });
+          } catch (error: any) {
+              console.error('계약서 서명 실패:', error);
+              toast.error(error.response?.data?.message || '계약서 서명에 실패했습니다.', { id: toastId });
+          } finally {
+              // 계약서 요소 다시 숨김
+              if (contractRef.current) {
+                  contractRef.current.style.display = 'none';
+                  contractRef.current.style.visibility = 'hidden';
+              }
           }
-      }
   };
 
   const handleDownloadPDF = async () => {

@@ -13,9 +13,11 @@ declare global {
 
 interface PhoneLoginProps {
   onLoginSuccess: (employeeId: string, employeeName: string, companyName: string, contractStatus: string) => void;
+  contractId?: string | null; // 계약서 ID (회원가입 시 필요)
+  isContractSigning?: boolean; // 계약서 서명을 위한 로그인인지 여부
 }
 
-export function PhoneLogin({ onLoginSuccess }: PhoneLoginProps) {
+export function PhoneLogin({ onLoginSuccess, contractId, isContractSigning = false }: PhoneLoginProps) {
   const [kakaoLoading, setKakaoLoading] = useState(false);
 
   // 카카오 SDK 초기화 및 자동 로그인 시도
@@ -48,7 +50,7 @@ export function PhoneLogin({ onLoginSuccess }: PhoneLoginProps) {
     } else {
       initKakao();
     }
-  }, []);
+  }, []); // 컴포넌트 마운트 시 한 번만 실행
 
   // 자동 로그인 확인 (카카오톡에서 이미 로그인된 경우)
   const checkAutoLogin = async () => {
@@ -64,21 +66,26 @@ export function PhoneLogin({ onLoginSuccess }: PhoneLoginProps) {
         console.log('[PhoneLogin] Found existing Kakao access token, attempting auto login');
         setKakaoLoading(true);
         
-        // 자동 로그인 시도 (회원가입은 근로자 정보 입력 화면에서 처리)
-        const loginResult = await api.loginByKakao(accessToken);
-        
-        if (loginResult.employee) {
-          const employee = loginResult.employee;
-          const companyName = employee.company?.name || '';
-          const contractStatus = (employee as any).contractStatus || 'PENDING';
+        try {
+          // 자동 로그인 시도 (일반 로그인만)
+          const loginResult = await api.loginByKakao(accessToken);
           
-          toast.success('로그인 성공');
-          onLoginSuccess(employee.id, employee.name, companyName, contractStatus);
-        } else {
-          console.log('[PhoneLogin] Auto login failed - employee not found');
+          if (loginResult.employee) {
+            const employee = loginResult.employee;
+            const companyName = employee.company?.name || '';
+            const contractStatus = (employee as any).contractStatus || 'PENDING';
+            
+            toast.success('로그인 성공');
+            onLoginSuccess(employee.id, employee.name, companyName, contractStatus);
+          } else {
+            console.log('[PhoneLogin] Auto login failed - employee not found');
+          }
+        } catch (error: any) {
+          console.log('[PhoneLogin] Auto login check failed (this is OK if user is not logged in):', error);
+          // 자동 로그인 실패는 정상적인 경우이므로 에러를 표시하지 않음
+        } finally {
+          setKakaoLoading(false);
         }
-        
-        setKakaoLoading(false);
       } else {
         console.log('[PhoneLogin] No existing Kakao access token found');
       }
@@ -131,23 +138,40 @@ export function PhoneLogin({ onLoginSuccess }: PhoneLoginProps) {
       window.Kakao.Auth.login({
         success: async (authObj: any) => {
           try {
-            // 카카오 액세스 토큰으로 백엔드 로그인 (회원가입은 근로자 정보 입력 화면에서 처리)
-            const loginResult = await api.loginByKakao(authObj.access_token);
+            // 계약서 서명을 위한 로그인인 경우 회원가입 처리
+            if (isContractSigning && contractId) {
+              console.log('[PhoneLogin] Registering with Kakao for contract signing, contractId:', contractId);
+              const registerResult = await api.registerByKakao(authObj.access_token, contractId);
 
-            if (loginResult.employee) {
-              const employee = loginResult.employee;
-              const companyName = employee.company?.name || '';
-              const contractStatus = (employee as any).contractStatus || 'PENDING';
+              if (registerResult.employee) {
+                const employee = registerResult.employee;
+                const companyName = employee.company?.name || '';
+                const contractStatus = (employee as any).contractStatus || 'PENDING';
 
-              // localStorage 저장은 App.tsx에서 계약서 서명 완료 시에만 수행
-              toast.success('로그인 성공');
-              onLoginSuccess(employee.id, employee.name, companyName, contractStatus);
+                toast.success(registerResult.isNew ? '회원가입이 완료되었습니다.' : registerResult.message || '로그인 성공');
+                onLoginSuccess(employee.id, employee.name, companyName, contractStatus);
+              } else {
+                toast.error('회원가입에 실패했습니다.');
+              }
             } else {
-              toast.error('등록된 정보가 없습니다. 회사의 초대 링크를 통해 먼저 등록해주세요.');
+              // 일반 로그인 (기존 사용자만)
+              console.log('[PhoneLogin] Logging in with Kakao');
+              const loginResult = await api.loginByKakao(authObj.access_token);
+
+              if (loginResult.employee) {
+                const employee = loginResult.employee;
+                const companyName = employee.company?.name || '';
+                const contractStatus = (employee as any).contractStatus || 'PENDING';
+
+                toast.success('로그인 성공');
+                onLoginSuccess(employee.id, employee.name, companyName, contractStatus);
+              } else {
+                toast.error('등록된 정보가 없습니다. 회사의 초대 링크를 통해 먼저 등록해주세요.');
+              }
             }
           } catch (error: any) {
             console.error('[PhoneLogin] Kakao login/register failed:', error);
-            const errorMessage = error.response?.data?.message || '카카오 로그인에 실패했습니다.';
+            const errorMessage = error.response?.data?.message || (isContractSigning ? '카카오 회원가입에 실패했습니다.' : '카카오 로그인에 실패했습니다.');
             toast.error(errorMessage);
           } finally {
             setKakaoLoading(false);
