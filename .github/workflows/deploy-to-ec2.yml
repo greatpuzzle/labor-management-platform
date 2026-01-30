@@ -1,0 +1,138 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/admin/**'
+      - 'apps/backend/**'
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - '.github/workflows/deploy-to-ec2.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to EC2
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[backend]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/backend')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          cd apps/backend && npm install
+
+      - name: Build backend
+        run: |
+          cd apps/backend
+          npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H 43.200.44.109 >> ~/.ssh/known_hosts
+
+      - name: Deploy backend files
+        run: |
+          scp -i ~/.ssh/ec2_key.pem -r apps/backend/dist/* ubuntu@43.200.44.109:~/app/backend/dist/
+          scp -i ~/.ssh/ec2_key.pem apps/backend/prisma/schema.prisma ubuntu@43.200.44.109:~/app/backend/prisma/
+          scp -i ~/.ssh/ec2_key.pem -r apps/backend/prisma/migrations/* ubuntu@43.200.44.109:~/app/backend/prisma/migrations/
+
+      - name: Run migrations and restart
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem ubuntu@43.200.44.109 << 'EOF'
+            cd /home/ubuntu/app/backend
+            npx prisma generate
+            npx prisma migrate deploy
+            pm2 restart backend-api || pm2 start ecosystem.config.js --env production
+          EOF
+
+  deploy-admin:
+    name: Deploy Admin to EC2
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[admin]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/admin')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          cd apps/admin && npm install
+
+      - name: Build admin app
+        env:
+          VITE_API_URL: http://43.200.44.109:3002
+          VITE_MOBILE_APP_URL: http://43.200.44.109:3001
+        run: |
+          cd apps/admin
+          npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H 43.200.44.109 >> ~/.ssh/known_hosts
+
+      - name: Deploy admin files
+        run: |
+          scp -i ~/.ssh/ec2_key.pem -r apps/admin/dist/* ubuntu@43.200.44.109:~/app/admin/
+
+  deploy-mobile:
+    name: Deploy Mobile to EC2
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[mobile]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/mobile')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          cd apps/mobile && npm install
+
+      - name: Build mobile app
+        env:
+          VITE_API_URL: http://43.200.44.109:3002
+        run: |
+          cd apps/mobile
+          npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H 43.200.44.109 >> ~/.ssh/known_hosts
+
+      - name: Deploy mobile files
+        run: |
+          scp -i ~/.ssh/ec2_key.pem -r apps/mobile/dist/* ubuntu@43.200.44.109:~/app/mobile/
