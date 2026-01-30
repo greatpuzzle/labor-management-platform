@@ -13,10 +13,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-changes:
+    name: Check changed files
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      admin: ${{ steps.filter.outputs.admin }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'apps/backend/**'
+            admin:
+              - 'apps/admin/**'
+            mobile:
+              - 'apps/mobile/**'
+              - 'packages/shared/**'
+
   deploy-backend:
     name: Deploy Backend to EC2
     runs-on: ubuntu-latest
-    # paths 필터가 이미 있으므로 항상 실행 (백엔드 관련 파일 변경 시)
+    needs: check-changes
+    if: needs.check-changes.outputs.backend == 'true'
     
     steps:
       - name: Checkout
@@ -63,7 +85,8 @@ jobs:
   deploy-admin:
     name: Deploy Admin to EC2
     runs-on: ubuntu-latest
-    # paths 필터가 이미 있으므로 항상 실행 (어드민 관련 파일 변경 시)
+    needs: check-changes
+    if: needs.check-changes.outputs.admin == 'true'
     
     steps:
       - name: Checkout
@@ -102,7 +125,8 @@ jobs:
   deploy-mobile:
     name: Deploy Mobile to EC2
     runs-on: ubuntu-latest
-    # paths 필터가 이미 있으므로 항상 실행 (모바일 관련 파일 변경 시)
+    needs: check-changes
+    if: needs.check-changes.outputs.mobile == 'true'
     
     steps:
       - name: Checkout
