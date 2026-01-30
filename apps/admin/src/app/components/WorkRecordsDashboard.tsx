@@ -335,7 +335,7 @@ export function WorkRecordsDashboard({
     };
 
     loadData();
-  }, [companyId, selectedWeekStart]);
+  }, [companyId, selectedWeekStart, filteredEmployees]);
 
   // 주간 직원 데이터 계산
   const weeklyEmployeeData: WeeklyEmployeeData[] = useMemo(() => {
@@ -1066,7 +1066,7 @@ export function WorkRecordsDashboard({
                             status: 'none' as const,
                             tasks: [],
                           };
-                          return renderDayCell(emp.employeeId, dayData, dateKey, idx);
+                          return renderDayCell(empData.employeeId, dayData, dateKey, idx);
                         })}
                         <TableCell className="text-center">
                           <div className="space-y-1">
