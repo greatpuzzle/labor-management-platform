@@ -16,7 +16,7 @@ jobs:
   deploy-backend:
     name: Deploy Backend to EC2
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[backend]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/backend')
+    # paths 필터가 이미 있으므로 항상 실행 (백엔드 관련 파일 변경 시)
     
     steps:
       - name: Checkout
@@ -63,7 +63,7 @@ jobs:
   deploy-admin:
     name: Deploy Admin to EC2
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[admin]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/admin')
+    # paths 필터가 이미 있으므로 항상 실행 (어드민 관련 파일 변경 시)
     
     steps:
       - name: Checkout
@@ -102,7 +102,7 @@ jobs:
   deploy-mobile:
     name: Deploy Mobile to EC2
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[mobile]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch' || contains(join(github.event.commits.*.modified, ' '), 'apps/mobile')
+    # paths 필터가 이미 있으므로 항상 실행 (모바일 관련 파일 변경 시)
     
     steps:
       - name: Checkout
